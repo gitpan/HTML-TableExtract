@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.00';
+$VERSION = '1.01';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -501,7 +501,8 @@ sub _current_table_state {
     # Harvest if trigger conditions have been met in a terminus
     # frame. If headers have been found, and we are not beneath a
     # header column, then ignore this text.
-    if ($self->_terminus_trigger && $self->_column_wanted) {
+    if ($self->_terminus_trigger && $self->_column_wanted ||
+	$self->{umbrella}) {
       print STDERR "Add text ",join(',', @_),"\n" if $self->{debug} > 3;
       $self->_add_text(@_);
     }
@@ -1279,7 +1280,7 @@ HTML::TableExtract - Perl extension for extracting the text contained in tables 
  foreach $ts ($te->table_states) {
    print "Table (", join(',', $ts->coords), "):\n";
    foreach $row ($ts->rows) {
-      print join(',', @$_), "\n";
+      print join(',', @$row), "\n";
    }
  }
 
@@ -1287,14 +1288,14 @@ HTML::TableExtract - Perl extension for extracting the text contained in tables 
  foreach $table ($te->tables) {
    print "Table (", join(',', $te->table_coords($table)), "):\n";
    foreach $row ($te->rows($table)) {
-     print join(',', @$_), "\n";
+     print join(',', @$row), "\n";
    }
  }
 
  # Shorthand...top level rows() method assumes the first table found
  # in the document if no arguments are supplied.
  foreach $row ($te->rows) {
-    print join(',', @$_), "\n";
+    print join(',', @$row), "\n";
  }
 
  # Using depth and count information.  Every table in the document has
@@ -1309,8 +1310,8 @@ HTML::TableExtract - Perl extension for extracting the text contained in tables 
  $te->parse($html_string);
  foreach $ts ($te->table_states) {
     print "Table found at ", join(',', $ts->coords), ":\n";
-    foreach ($ts->rows) {
-       print "   ", join(',', @$_), "\n";
+    foreach $row ($ts->rows) {
+       print "   ", join(',', @$row), "\n";
     }
  }
 

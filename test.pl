@@ -165,7 +165,7 @@ foreach (@tablestates) {
 }
 
 print $pass ? "ok " : "not ok ";
-printf "%2d (by depth and count)\n", $tcount;
+printf "%2d (by depth and count, subtable scoop)\n", $tcount;
 ++$tcount;
 
 # Advanced header extraction. Test skew and column mapping.
@@ -458,8 +458,13 @@ sub good_data {
   }
   my $row = 0 + $skew;
 
+  # Must have rows
+  return 0 unless @{$t};
+
   # See if we got the numbers.
   foreach my $r ($row .. $#$t) {
+    # Must have columns
+    return 0 unless @{$t->[$r]};
     foreach my $c (0 .. $#{$t->[$r]}) {
       my $rc = $skew ? $r : $r + 1;
       next if $ts->{headers} && !$ts->{hits}{$c};
