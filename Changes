@@ -1,5 +1,9 @@
 Revision history for Perl extension HTML::TableExtract.
 
+1.07  Wed Aug 22 06:14:24 CDT 2001
+	- Added keep_html option for HTML retention
+	- bug fix for depth/count targets
+
 1.06  Thu Nov  2 15:29:49 CST 2000
 	- Added <br> translation to newlines (enabled by default)
 	- cleaned up some warnings

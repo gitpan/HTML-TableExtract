@@ -54,11 +54,11 @@ ACKNOWLEDGEMENTS
 
 Thanks to the following people for their generous bug catching and
 fault analysis: Celeste Suliin Burris, David Finberg, Robert Goff,
-Patrick Naubert, Volker Stuerzl, and Steve Wong.
+Jeremy Howard, Patrick Naubert, Volker Stuerzl, and Steve Wong.
 
 COPYRIGHT
 
-Copyright (c) 1999-2000 Matthew P. Sisk.  All rights reserved.
+Copyright (c) 1999-2001 Matthew P. Sisk.  All rights reserved.
 All wrongs revenged. This program is free software; you can
 redistribute it and/or modify it under the same terms as
 Perl itself.

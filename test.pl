@@ -150,6 +150,23 @@ print $pass ? "ok " : "not ok ";
 printf "%2d (by header)\n", $tcount;
 ++$tcount;
 
+# By depth and count
+$pass = 1;
+$te = new HTML::TableExtract(
+			     depth     => 0,
+			     count     => 2,
+			    );
+$te->parse($html);
+@tablestates = $te->table_states;
+$pass = 0 unless @tablestates == 1;
+foreach (@tablestates) {
+  $pass = 0 unless good_data($_);
+}
+
+print $pass ? "ok " : "not ok ";
+printf "%2d (by depth and count)\n", $tcount;
+++$tcount;
+
 # By subtable scoop
 $pass = 1;
 $te = new HTML::TableExtract(

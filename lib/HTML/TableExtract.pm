@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.06';
+$VERSION = '1.07';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -33,6 +33,7 @@ my %Defaults = (
 		keep         => 0,
 		keepall      => 0,
 		debug        => 0,
+		keep_html    => 0,
 	       );
 my $Dpat = join('|', keys %Defaults);
 
@@ -97,6 +98,7 @@ sub start {
   # tags if we aren't in a table.
   if ($self->{_in_a_table}) {
     my $ts = $self->_current_table_state;
+    $self->text($_[3]) if $self->{keep_html} && $ts->{in_cell};
     if ($_[0] eq 'tr') {
       $ts->_enter_row;
     }
@@ -123,7 +125,7 @@ sub start {
   # <br> will sometimes make the resulting text hard to parse if there
   # is no newline. Therefore, when enabled, we replace <br> with
   # newline. Pointed out by Volker Stuerzl <Volker.Stuerzl@gmx.de>
-  if ($_[0] eq 'br' && $self->{br_translate}) {
+  if ($_[0] eq 'br' && $self->{br_translate} && !$self->{keep_html}) {
     $self->text("\n");
   }
 
@@ -144,6 +146,7 @@ sub end {
     elsif ($_[0] eq 'table') {
       $self->_exit_table;
     }
+    $self->text($_[1]) if $self->{keep_html} && $ts->{in_cell};
   }
 }
 
@@ -304,15 +307,16 @@ sub _enter_table {
 
   # Basic parameters for the soon-to-be-created table state.
   my %tsparms = (
-		 depth    => $depth,
-		 count    => $count,
-		 umbrella => $umbrella,
-		 automap  => $self->{automap},
-		 elastic  => $self->{elastic},
-		 counts   => $counts,
-		 keep     => $self->{keep},
-		 keepall  => $self->{keepall},
-		 debug    => $self->{debug},
+		 depth     => $depth,
+		 count     => $count,
+		 umbrella  => $umbrella,
+		 automap   => $self->{automap},
+		 elastic   => $self->{elastic},
+		 counts    => $counts,
+		 keep      => $self->{keep},
+		 keepall   => $self->{keepall},
+		 debug     => $self->{debug},
+		 keep_html => $self->{keep_html},
 		);
 
   # Target constraints. There is no point in passing any of these
@@ -415,6 +419,7 @@ sub _current_table_state {
 ##########
 
 {
+
   package HTML::TableExtract::TableState;
 
   use strict;
@@ -635,7 +640,7 @@ sub _current_table_state {
 	if (defined $f->{depth} && $f->{depth} != $self->{depth}) {
 	  $dc_hit = 0;
 	}
-	if (defined $f->{count}) {
+	elsif (defined $f->{count}) {
 	  $dc_hit = 0;
 	  if (exists $f->{counts}{$self->{depth}} &&
 	      $f->{count} == $f->{counts}{$self->{depth}}) {
@@ -846,8 +851,8 @@ sub _current_table_state {
       }
 
       if ($self->{debug} > 3) {
-	print STDERR "Adding frame ($f):\n   {\n";
-	foreach (sort keys %$f) {
+        print STDERR "Adding frame ($f):\n   {\n";
+        foreach (sort keys %$f) {
 	  next unless defined $f->{$_}; # appease -w
 	  print STDERR "    $_ => $f->{$_}\n";
 	}
@@ -1410,7 +1415,8 @@ TableExtract will automatically compensate for cell span issues so
 that columns are really the same columns as you would visually see in
 a browser. This behavior can be disabled by setting the I<gridmap>
 parameter to 0. HTML is stripped from the entire textual content of a
-cell before header matches are attempted.
+cell before header matches are attempted -- unless the I<keep_html>
+parameter was enabled.
 
 I<Depth> and I<Count> are more specific ways to specify tables in
 relation to one another. I<Depth> represents how deeply a table
@@ -1623,7 +1629,9 @@ default, be rearranged into the same order as the headers you provide
 (see the I<automap> parameter for more information). Additionally, by
 default columns are considered what you would see visually beneath
 that header when the table is rendered in a browser. See the
-I<gridmap> parameter for more information.
+I<gridmap> parameter for more information. HTML within a header is
+stripped before the match is attempted, unless the B<keep_html>
+parameter was specified.
 
 =item depth
 
@@ -1690,6 +1698,14 @@ HTML::Entities::decode_entities(). Enabled by default.
 
 Translate <br> tags into newlines. Sometimes the remaining text can be
 hard to parse if the <br> tag is simply dropped. Enabled by default.
+Has no effect if I<keep_html> is enabled.
+
+=item keep_html
+
+Return the raw HTML contained in the cell, rather than just the
+visible text. Embedded tables are B<not> retained in the HTML
+extracted from a cell. Patterns for header matches must take into
+account HTML in the string if this option is enabled.
 
 =item debug
 
@@ -1818,7 +1834,7 @@ Matthew P. Sisk, E<lt>F<sisk@mojotoad.com>E<gt>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000 Matthew P. Sisk.
+Copyright (c) 2000-2001 Matthew P. Sisk.
 All rights reserved. All wrongs revenged. This program is free
 software; you can redistribute it and/or modify it under the
 same terms as Perl itself.
