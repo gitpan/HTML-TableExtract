@@ -27,6 +27,10 @@ of the "make install" process.  You should also be able to use
 the 'perldoc' utility to extract and read documentation from the
 module directly.
 
+There is also an example page available:
+
+   http://www.mojotoad.com/projects/HTML-TableExtract/tables.html
+
 SUPPORT
 
 There is a mailing list available. To register or examine archived
@@ -50,7 +54,7 @@ ACKNOWLEDGEMENTS
 
 Thanks to the following people for their generous bug catching and
 fault analysis: Celeste Suliin Burris, David Finberg, Robert Goff,
-and Patrick Naubert.
+Patrick Naubert, and Steve Wong.
 
 COPYRIGHT
 

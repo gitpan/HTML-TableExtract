@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.03';
+$VERSION = '1.04';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -494,20 +494,25 @@ sub _current_table_state {
   sub _taste_text {
     # Gather the provided text, either for header scanning or
     # harvesting.
-    my $self = shift;
-    return unless @_;
+    my($self, $text) = @_;
+    return unless defined $text;
+
+    # Calculate and track skew, regardless of whether we actually want
+    # this column or not.
+    my $sc  = $self->_skew;
+
     # Harvest if trigger conditions have been met in a terminus
     # frame. If headers have been found, and we are not beneath a
     # header column, then ignore this text.
     if ($self->_terminus_trigger && $self->_column_wanted ||
 	$self->{umbrella}) {
       print STDERR "Add text ",join(',', @_),"\n" if $self->{debug} > 3;
-      $self->_add_text(@_);
+      $self->_add_text($text, $sc);
     }
     # Regardless of whether or not we are harvesting, we still try to
     # scan for headers in waypoint frames.
     if ($self->_any_headers && !$self->_any_htrigger) {
-      $self->_htxt(@_);
+      $self->_htxt($text);
     }
     1;
   }
@@ -1142,11 +1147,10 @@ sub _current_table_state {
   }
 
   sub _add_text {
-    my($self, $txt) = @_;
+    my($self, $txt, $skew_column) = @_;
     defined $txt or return;
     my $row = $self->{content}[$#{$self->{content}}];
-    my $sc  = $self->_skew;
-    $row->[$sc] .= $txt;
+    $row->[$skew_column] .= $txt;
     $txt;
   }
 

@@ -1,5 +1,10 @@
 Revision history for Perl extension HTML::TableExtract.
 
+1.04  Sat Jul 15 02:18:04 CDT 2000
+	- fixed gridmap bug involving skew calcs on unwanted
+          columns
+        - added example page reference in README
+
 1.03  Tue Jul  7 03:43:30 CDT 2000
 	- gridmap option, columns are really columns regardless
 	  of cell span skew
