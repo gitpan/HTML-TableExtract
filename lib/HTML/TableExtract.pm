@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.03';
+$VERSION = '0.04';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -22,6 +22,7 @@ my %Defaults = (
 		headers => undef,
 		depth   => undef,
 		count   => undef,
+		decode  => 1,
 		automap => 1,
 		debug   => 0,
 	       );
@@ -36,7 +37,7 @@ sub new {
       ref $v eq 'ARRAY' or croak "Headers must be passed in ref to array\n";
       $parms{$k} = $v;
     }
-    elsif ($k =~ /^depth|count|automap|debug/) {
+    elsif ($k =~ /^depth|count|automap||decode|debug/) {
       $parms{$k} = $v;
     }
     else {
@@ -55,14 +56,14 @@ sub new {
     }
     my $hstring = '(' . join('|', map("($_)", @{$self->{headers}})) . ')';
     print STDERR "HPAT: /$hstring/\n" if $self->{debug} >= 2;
-    $self->{_hpat} = qr/$hstring/im;
+    $self->{_hpat} = $hstring;
   }
   $self->{_cdepth} = -1;
   $self->{_ccount} = -1;
   $self->{_tablestack}        = [];
   $self->{_tables}            = {};
   $self->{_tables_sequential} = [];
-  $self->{_table_coords}      = {};
+  $self->{_table_mapback}     = {};
   $self->{_counts}            = [];
   $self;
 }
@@ -92,9 +93,12 @@ sub start {
 	      cc        => -1,
 	      grab      => 1,
 	      content   => [],
+	      htxt      => '',
+	      order     => [],
+	      imap      => {},
 	     };
     push(@{$self->{_tablestack}}, $ts);
-    $self->_reset_hits($self->_current_table_state);
+    $self->_reset_hits($ts);
 
     # Now we decide if we want to ignore this table
 
@@ -111,7 +115,6 @@ sub start {
   if ($self->{_in_a_table}) {
     my $ts = $self->_current_table_state;
     if ($_[0] eq 'tr') {
-      croak "Mangled HTML, <TR> with no <TABLE>\n" unless $self->{_in_a_table};
       ++$ts->{in_row};
       ++$ts->{rc};
       if ($ts->{grab}) {
@@ -129,10 +132,21 @@ sub start {
 	++$ts->{rc};
 	print STDERR "Mangled HTML in table ($ts->{depth},$ts->{count}), inferring <TR> as row $ts->{rc}\n" if $self->{debug};
       }
+      # Initialize cell, if appropriate
       if ($ts->{grab}) {
-	# Initialize cell values to appease -w
-	$ts->{content}[$ts->{rc}][$ts->{cc}] = ''
-	  unless $self->{headers} && !$ts->{hslurp};
+	my $init;
+	if ($self->{headers}) {
+	  if ($ts->{hslurp} && $ts->{hits}{$ts->{cc}}) {
+	    ++$init;
+	  }
+	}
+	else {
+	  ++$init;
+	}
+	if ($init) {
+	  my $r = $ts->{content}[$ts->{rc}];
+	  $r->[$#$r + 1] = '';
+	}	  
       }
     }
   }
@@ -144,10 +158,12 @@ sub end {
     my $ts = $self->_current_table_state;
     if ($_[0] eq 'td' || $_[0] eq 'th') {
       # Scan for headers if they have been provided and this
-      # table has not been vetoed by depth/count specifications
-      if ($self->{headers} && $ts->{grab} && !$ts->{hslurp}) {
+      # table has not been vetoed by depth/count specifications,
+      # we're not already slurping, and we have not found all headers.
+      if ($self->{headers} && $ts->{grab} &&
+	  !$ts->{hslurp} && !$ts->{head_found}) {
 	my $h = $ts->{hits};
-	if ($ts->{htxt} =~ /$self->{_hpat}/) {
+	if ($ts->{htxt} =~ /$self->{_hpat}/imo) {
 	  my $hit = $1;
 	  print STDERR "HIT on '$hit'\n" if $self->{debug} >= 4;
 	  ++$ts->{scanning};
@@ -161,16 +177,17 @@ sub end {
 	    }
 	  }
 	  $h->{$ts->{cc}} = $hit;
+	  push(@{$ts->{order}}, $ts->{cc});
+	  $ts->{imap}{$ts->{cc}} = $#{$ts->{order}};
 	  if (!%{$ts->{hits_left}}) {
 	    # We have found all headers, but we won't
 	    # start slurping until this row has ended
 	    ++$ts->{head_found};
 	    $ts->{scanning} = undef;
 	    # Since we don't return the header row, we
-	    # pretend we never saw it.
-	    --$ts->{rc};
-	    # Remember hits for figuring out the order
-	    $self->{_hits}{$ts->{depth}}{$ts->{count}} = $h;
+	    # pretend we never saw it. (and rc will inc
+	    # once we start the next row).
+	    $ts->{rc} = -1;
 	  }
 	}
 	# Reset buffer for next cell
@@ -200,8 +217,9 @@ sub end {
       if ($ts->{grab}) {
 	# Add our newly captured table, if we actually bothered with it.
 	unless ($self->{headers} && !$ts->{hslurp}) {
-	  $self->_add_table($ts->{content});
-	  print STDERR "Captured table ($ts->{depth},$ts->{count})\n" if $self->{debug} >= 2;
+	  $self->_add_table_state($ts);
+	  print STDERR "Captured table ($ts->{depth},$ts->{count})\n"
+	    if $self->{debug} >= 2;
 	}
       }
       # Restore last table state
@@ -227,27 +245,37 @@ sub text {
     my $ts = $self->_current_table_state;
     if ($ts->{in_row} && $ts->{in_cell}) {
 
-      if ($self->{headers} && !$ts->{head_found}) {
-	$ts->{htxt} .= $_[0];
-	return;
+      # Just add this text to header scan if using headers and
+      # they haven't all been found.
+      if ($self->{headers}) {
+	if (!$ts->{head_found}) {
+	  $ts->{htxt} .= $self->{decode} ? decode_entities($_[0]) : $_[0];
+	  return;
+	}
+	elsif (!$ts->{hslurp}) {
+	  # In this case we've found our headers but need to
+	  # finish the header row since there are columns
+	  # we don't want.
+	  print STDERR "Skipping column $ts->{cc}\n" if $self->{debug} > 1;
+	  return;
+	}
       }
 
       # Initialize grab status
       my $grab = $ts->{grab};
 
-      if ($self->{headers}) {
+      if ($self->{headers} && $ts->{hslurp}) {
 	# Indicate it's time to grab only if we are in an
-	# applicable column.
-	if ($ts->{hslurp}) {
-	  $grab = 0 unless exists $self->_current_hits->{$ts->{cc}};
-	}
+	# applicable column.	  
+	$grab = 0 unless exists $ts->{hits}{$ts->{cc}};
       }
 
       if ($grab) {
 	# The ayes have it, we grab some content.
-	my $txt = decode_entities($_[0]);
-	$ts->{content}[$ts->{rc}][$ts->{cc}] .= $txt;
-	return $_[0];
+	my $r = $ts->{content}[$ts->{rc}];
+	my $txt = $self->{decode} ? decode_entities($_[0]) : $_[0];
+	$r->[$#$r] .= $txt;
+	return $txt;
       }
     }
   }
@@ -270,7 +298,11 @@ sub counts {
 }
 
 sub table {
-  # Return the table for a particular depth and count
+  shift->table_state(@_)->{content};
+}
+
+sub table_state {
+  # Return the table content for a particular depth and count
   my($self, $depth, $count) = @_;
   defined $depth or croak "Depth required\n";
   defined $count or croak "Count required\n";
@@ -283,26 +315,44 @@ sub table {
 sub rows {
   # Return the rows for a table.  First table found if no table specified.
   my($self, $table) = @_;
+  my @tc;
   if (!$table) {
     $table = $self->first_table_found;
   }
   return () unless ref $table;
   if ($self->{automap} && $self->_map_makes_a_difference) {
-    my @rows;
+    my @cm = $self->column_map;
     foreach (@$table) {
-      push(@rows, [@{$_}[$self->column_map]]);
+      my $r = [@{$_}[@cm]];
+      # since there could have been non-existent <TD> we need
+      # to double check initilization to appease -w
+      foreach (0 .. $#$r) {
+	$r->[$_] = '' unless defined $r->[$_];
+      }
+      push(@tc, $r);
     }
-    $table = \@rows;
   }
-  @{$table};
+  else {
+    @tc = @$table;
+  }
+  @tc;
 }
 
-sub _add_table {
-  my($self, $table) = @_;
-  croak "Table ref required\n" unless ref $table;
-  $self->{_tables}{$self->{_cdepth}}{$self->{_ccount}} = $table;
-  push(@{$self->{_tables_sequential}}, $table);
-  $self->{_table_coords}{$table} = [$self->{_cdepth}, $self->{_ccount}];
+sub _add_table_state {
+  my($self, $ts) = @_;
+  croak "Table state ref required\n" unless ref $ts;
+  # Preliminary init sweep to appease -w
+  # These undefs would exist for empty <TD> since text()
+  # never got called. Don't want to blindly do this
+  # in a start('td') because headers might have vetoed.
+  foreach my $r (@{$ts->{content}}) {
+    foreach (0 .. $#$r) {
+      $r->[$_] = '' unless defined $r->[$_];
+    }
+  }
+  $self->{_tables}{$ts->{depth}}{$ts->{count}} = $ts;
+  $self->{_table_mapback}{$ts->{content}} = $ts;
+  push(@{$self->{_tables_sequential}}, $ts);
 }
 
 sub _map_makes_a_difference {
@@ -331,12 +381,23 @@ sub _increment_count {
 }
 
 sub first_table_found {
+  shift->first_table_state_found(@_)->{content};
+}
+
+sub first_table_state_found {
   my $self = shift;
   $self->{_tables_sequential}[0];
 }
-  
+
 sub tables {
-  # Return all valid tables found, in the order that they were seen.
+  # Return content of all valid tables found, in the order that
+  # they were seen.
+  map($_->{content}, shift->table_states(@_));
+}
+  
+sub table_states {
+  # Return all valid table records  found, in the order that
+  # they were seen.
   my $self = shift;
   @{$self->{_tables_sequential}};
 }
@@ -345,8 +406,9 @@ sub table_coords {
   # Return the depth and count of a table
   my($self, $table) = @_;
   ref $table or croak "Table reference required\n";
-  return () unless ref $self->{_table_coords}{$table};
-  @{$self->{_table_coords}{$table}};
+  my $ts = $self->{_table_mapback}{$table};
+  return () unless ref $ts;
+  ($ts->{depth}, $ts->{count});
 }
 
 sub column_map {
@@ -356,27 +418,27 @@ sub column_map {
   if (! defined $table) {
     $table = $self->first_table_found;
   }
-  my($depth, $count) = $self->table_coords($table);
+  my $ts = $self->{_table_mapback}{$table};
+  return () unless ref $ts;
   if ($self->{headers}) {
+    # First we order the original column counts by taking
+    # a hash slice based on the original header order.
+    # The resulting original column numbers are mapped to the
+    # actual content indicies since we could have a sparse slice.
     my %order;
-    foreach (keys %{$self->{_hits}{$depth}{$count}}) {
-      $order{$self->{_hits}{$depth}{$count}{$_}} = $_;
+    foreach (keys %{$ts->{hits}}) {
+      $order{$ts->{hits}{$_}} = $_;
     }
-    return @order{@{$self->{headers}}};
+    return map($ts->{imap}{$_}, @order{@{$self->{headers}}});
   }
   else {
-    return 0 .. $#{$self->{_tables}{$depth}{$count}[0]};
+    return 0 .. $#{$ts->{content}[0]};
   }
 }
 
 sub _current_table_state {
   my $self = shift;
   $self->{_tablestack}[$#{$self->{_tablestack}}];
-}
-
-sub _current_hits {
-  my $self = shift;
-  $self->{_hits}{$self->{_cdepth}}{$self->{_ccount}};
 }
 
 sub _reset_hits {
@@ -451,7 +513,9 @@ as vertical slices through a table.  In addition, HTML::TableExtract
 automatically rearranges each row in the same order as the headers
 you provided. If you would like to disable this, set I<automap> to
 0 during object creation, and instead rely on the column_map() method
-to find out the order in which the headers were found.
+to find out the order in which the headers were found. HTML is stripped
+from the entire textual content of a cell before header matches are
+attempted.
 
 I<Depth> and I<Count> are more specific ways to specify tables that have
 more dependencies on the HTML document layout.  I<Depth> represents
@@ -489,9 +553,8 @@ all of its basic methods. In particular, C<start()>, C<end()>, and C<text()>
 are utilized.  Feel free to override them, but if you do not eventually
 invoke them with some content, results are not guaranteed.
 
-Text that is gathered from the tables is decoded with HTML::Entities first.
-Also note that text can be chunked, so you are not guaranteed to be dealing
-with all of the text in a particular cell when C<text()> is invoked.
+Text that is gathered from the tables is decoded with HTML::Entities by
+default.
 
 =head1 METHODS
 
@@ -535,9 +598,14 @@ column orders. To get the original order, you will need to take
 another slice of each row using column_map(). I<automap> is enabled
 by default, but only has an affect if you have specified I<headers>.
 
+=item decode
+
+Automatically decode retrieved text with HTML::Entities::decode_entities().
+Enabled by default.
+
 =item debug
 
-Prints some debugging information to STDOUT.
+Prints some debugging information to STDOUT, more for higher values.
 
 =back
 
