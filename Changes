@@ -1,6 +1,6 @@
 Revision history for Perl extension HTML::TableExtract.
 
-1.01  Fri Jul  7 04:21:13 CDT 2000
+1.02  Fri Jul  7 04:21:13 CDT 2000
 	- fixed umbrella (subtables) bug
 	- doc tweak
 

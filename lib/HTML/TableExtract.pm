@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -24,7 +24,7 @@ my %Defaults = (
 		count        => undef,
 		chain        => undef,
 		subtables    => undef,
-		gridmap      => 0,
+		gridmap      => 1,
 		decode       => 1,
 		automap      => 1,
 		head_include => 0,
