@@ -73,7 +73,7 @@ $tcount = 2;
 @SKEW_DATA = (
 	      [ 'THIS IS A WHOLE ROW-CELL OF JUNK','','','' ],
 	      [ 'JUNK','Tasty tidbit (1,1)','JUNK','Tasty tidbit (1,3)' ],
-	      [ 'JUNK','BIGJUNK','','Tasty tidbit (2,3)' ],
+	      [ '','BIGJUNK','','Tasty tidbit (2,3)' ],
 	      [ 'Tasty tidbit (3,0)','','','Tasty tidbit (3,3)' ],
 	      [ 'Tasty tidbit (4,0)','','','Tasty tidbit (4,3)' ],
 	      [ 'JUNK BUTTON','','Tasty tidbit (5,2)','Tasty tidbit (5,3)' ],
@@ -548,13 +548,12 @@ $doc2 = <<__DOC2;
     <td colspan=4>THIS IS A WHOLE ROW-CELL OF JUNK</td>
 </tr>
 <tr>
-    <td>JUNK</td>
+    <td rowspan=2>JUNK</td>
     <td>Tasty tidbit (1,1)</td>
     <td>JUNK</td>
     <td>Tasty tidbit (1,3)</td>
 </tr>
 <tr>
-    <td>JUNK</td>
     <td colspan=2 rowspan=3>BIG<BR>JUNK</td>
     <td>Tasty tidbit (2,3)</td>
 </tr>

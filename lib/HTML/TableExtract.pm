@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.02';
+$VERSION = '1.03';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -110,8 +110,7 @@ sub start {
       if ($self->{gridmap}) {
 	my %attrs = ref $_[1] ? %{$_[1]} : {};
 	if (exists $attrs{rowspan} || exists $attrs{colspan}) {
-	  $ts->_skew($ts->{rc}, $ts->{cc},
-		     $attrs{rowspan} || 1, $attrs{colspan} || 1);
+	  $ts->_skew($attrs{rowspan} || 1, $attrs{colspan} || 1);
 	}
       }
     }
@@ -424,7 +423,6 @@ sub _current_table_state {
 		 htxt     => '',
 		 order    => [],
 		 counts   => [{}],
-		 skewmap  => {},
 		 debug    => 0,
 		};
     bless $self, $class;
@@ -729,8 +727,20 @@ sub _current_table_state {
     $self->_exit_cell;
     ++$self->{rc};
     ++$self->{in_row};
+
+    # Reset next_col for gridmapping
+    $self->{next_col} = 0;
+    while ($self->{taken}{"$self->{rc},$self->{next_col}"}) {
+      ++$self->{next_col};
+    }
+
     ++$self->{active} if $self->_terminus_trigger;
-    $self->{content}[$self->{rc}] = [] if $self->{active};
+    if ($self->{active}) {
+      # Add the new row, unless we're using headers and are still in
+      # the header row
+      push(@{$self->{content}}, [])
+	unless $self->_terminus_headers && $self->_still_in_header_row;
+    }
     $self->_evolve_frames if $self->_trigger_frames;
   }
 
@@ -740,10 +750,12 @@ sub _current_table_state {
     $self->{in_row} = 0;
     $self->{cc} = -1;
     $self->_reset_header_scanners;
-    if ($self->_terminus_headers && !$self->{hslurp} && $self->_terminus_htrigger) {
+    if ($self->_terminus_headers && $self->_still_in_header_row) {
       ++$self->{hslurp};
-      # Reset row count (ignores header row)
-      $self->{rc} = -1;
+      # Store header row number so that we can adjust later (we keep
+      # it around for now in case of skew situations, which are in
+      # absolute row terms)
+      $self->{hrow} = $self->{rc};
     }
   }
 
@@ -855,7 +867,7 @@ sub _current_table_state {
       next unless $f->{hpat};
       if ($self->{htxt} =~ /$f->{hpat}/im) {
 	my $hit = $1;
-	print STDERR "HIT on '$hit' in $self->{htxt}\n" if $self->{debug} >= 4;
+	print STDERR "HIT on '$hit' in $self->{htxt} ($self->{rc},$self->{cc})\n" if $self->{debug} >= 4;
 	++$f->{scanning};
 	# Get rid of the header segment that matched so we can tell
 	# when we're through with all header patterns.
@@ -868,7 +880,7 @@ sub _current_table_state {
 	}
 	push(@hits, $hit);
 	#
-	my $cc = $self->_skew($self->{rc}, $self->{cc});
+	my $cc = $self->_skew;
 	$f->{hits}{$cc} = $hit;
 	push(@{$f->{order}}, $cc);
 	if (!%{$f->{hits_left}}) {
@@ -1132,8 +1144,8 @@ sub _current_table_state {
   sub _add_text {
     my($self, $txt) = @_;
     defined $txt or return;
-    my $row = $self->{content}[$self->{rc}];
-    my $sc  = $self->_skew($self->{rc}, $self->{cc});
+    my $row = $self->{content}[$#{$self->{content}}];
+    my $sc  = $self->_skew;
     $row->[$sc] .= $txt;
     $txt;
   }
@@ -1141,39 +1153,59 @@ sub _current_table_state {
   sub _skew {
     # Skew registers the effects of rowspan/colspan issues when
     # gridmap is enabled.
-    my($self, $r, $c, $rspan, $cspan) = @_;
-    defined $r && defined $c or croak "Row and Column required\n";
+
+    my($self, $rspan, $cspan) = @_;
+    my($r,$c) = ($self->{rc},$self->{cc});
+
+    if ($self->{debug} > 5) {
+      print STDERR "($self->{rc},$self->{cc}) Inspecting skew for ($r,$c)";
+      print STDERR defined $rspan ? " (set with $rspan,$cspan)\n" : "\n";
+    }
+
+    my $sc = $c;
+    if (! defined $self->{skew_cache}{"$r,$c"}) {
+      $sc = $self->{next_col} if defined $self->{next_col};
+      $self->{skew_cache}{"$r,$c"} = $sc;
+      my $next_col = $sc + 1;
+      while ($self->{taken}{"$r,$next_col"}) {
+	++$next_col;
+      }
+      $self->{next_col} = $next_col;
+    }
+    else {
+      $sc = $self->{skew_cache}{"$r,$c"};
+    }
+
+    # If we have span arguments, set skews
     if (defined $rspan) {
-      # Set skew
+      # Default span is always 1, even if not explicitly stated.
       $rspan = 1 unless $rspan;
       $cspan = 1 unless $cspan;
-      # 1,1 is a degenerate case.
-      print STDERR "Adding skew for ($r,$c): ($rspan,$cspan)\n"
-	if $self->{debug};
-      return($r, $c) if $rspan == 1 && $cspan == 1;
-      ++$self->{skewers}{"$r,$c"};
-      # Set column skew for each spanned row
-      foreach my $rs (0 .. $rspan - 1) {
-	# If we in the same row as the skewer, the "span" is one less
-	# because the skewer cell occupies the same row.
-	print STDERR "Setting skew (",$r + $rs,",$c) ", $rs ? $cspan : $cspan - 1,"\n"
-	  if $self->{debug} > 2;
-	$self->{skewmap}{$r + $rs}{$c} = $rs ? $cspan : $cspan - 1;
-      }
-    }
-    # Calculate skew, if any, and return the results.
-    my($sr, $sc) = ($r, $c);
-    print STDERR "Inspecting ($r,$c)\n" if $self->{debug} > 5;
-    if (exists $self->{skewmap}{$r}) {
-      foreach (sort { $a <=> $b } keys %{$self->{skewmap}{$r}}) {
-	last if $_ > $c;
-	last if $_ == $c && $self->{skewers}{"$r,$c"};
-	print STDERR "($r,$c) ... $sc += $self->{skewmap}{$r}{$_}\n"
-	  if $self->{debug} > 3;
-	$sc += $self->{skewmap}{$r}{$_};
+      --$rspan;
+      --$cspan;
+      # 1,1 is a degenerate case, there's nothing to do.
+      if ($rspan || $cspan) {
+	foreach my $rs (0 .. $rspan) {
+	  my $cr = $r + $rs;
+	  # If we in the same row as the skewer, the "span" is one less
+	  # because the skewer cell occupies the same row.
+	  my $start_col = $rs ? $sc : $sc + 1;
+	  my $fin_col   = $sc + $cspan;
+	  foreach ($start_col .. $fin_col) {
+	    $self->{taken}{"$cr,$_"} = "$r,$sc" unless $self->{taken}{"$cr,$_"};
+	  }
+	  if (!$rs) {
+	    my $next_col = $fin_col + 1;
+	    while ($self->{taken}{"$cr,$next_col"}) {
+	      ++$next_col;
+	    }
+	    $self->{next_col} = $next_col;
+	  }
+	}
       }
     }
 
+    # Grid column number
     $sc;
   }
 
@@ -1206,6 +1238,12 @@ sub _current_table_state {
     0;
   }
 
+  sub _still_in_header_row {
+    my $self = shift;
+    return 0 unless $self->_terminus_headers;
+    !$self->{hslurp} && $self->_terminus_htrigger;
+  }
+
   # Non waypoint answers
 
   sub _active {
@@ -1230,8 +1268,10 @@ sub _current_table_state {
       # If we are using headers, veto the grab unless we are in an
       # applicable column beneath one of the headers.
       $wanted = 0
-	unless exists $tframe->{hits}{$self->_skew($self->{rc}, $self->{cc})};
+	unless exists $tframe->{hits}{$self->_skew};
     }
+    print STDERR "Want ($self->{rc},$self->{cc}): $wanted\n"
+      if $self->{debug} > 7;
     $wanted;
   }
 
@@ -1241,8 +1281,9 @@ sub _current_table_state {
     my($self, @frames) = @_;
     foreach my $frame (@frames ? @frames : @{$self->{frames}}) {
       next unless $frame->{headers};
-      $frame->{hits}  = {};
-      $frame->{order} = [];
+      $frame->{hits}     = {};
+      $frame->{order}    = [];
+      $frame->{scanning} = undef;
       foreach (@{$frame->{headers}}) {
 	++$frame->{hits_left}{$_};
       }

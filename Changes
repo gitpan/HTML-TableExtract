@@ -1,10 +1,6 @@
 Revision history for Perl extension HTML::TableExtract.
 
-1.02  Fri Jul  7 04:21:13 CDT 2000
-	- fixed umbrella (subtables) bug
-	- doc tweak
-
-1.00  Tue Jul  4 00:43:30 CDT 2000
+1.03  Tue Jul  7 03:43:30 CDT 2000
 	- gridmap option, columns are really columns regardless
 	  of cell span skew
 	- Added chains for relative targeting
