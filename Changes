@@ -1,5 +1,9 @@
 Revision history for Perl extension HTML::TableExtract.
 
+0.02  Thu Feb 10 13:43:04 CST 2000
+	- Fixed some problems tracking counts at revisited depths.
+	- Minor doc fix, added mailing list
+
 0.01  Wed Feb  2 18:24:07 CST 2000
 	- Initial version.
 

@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -52,7 +52,8 @@ sub new {
     if ($self->{debug}) {
       print STDERR "TE here, headers: ", join(',', @{$self->{headers}}),"\n";
     }
-    $self->{_hpat} = join('|', map("($_)", @{$self->{headers}}))
+    my $hstring = '(' . join('|', map("($_)", @{$self->{headers}})) . ')';
+    $self->{_hpat} = qr($hstring);
   }
   $self->{_cdepth} = -1;
   $self->{_ccount} = -1;
@@ -60,6 +61,7 @@ sub new {
   $self->{_tables}            = {};
   $self->{_tables_sequential} = [];
   $self->{_table_coords}      = {};
+  $self->{_counts}            = [];
   $self;
 }
 
@@ -72,8 +74,10 @@ sub start {
       $self->{_ccount} = -1;
     }
     ++$self->{_cdepth};
-    ++$self->{_ccount};
     ++$self->{_in_a_table};
+    $self->_increment_count($self->{_cdepth});
+    $self->{_ccount} = $self->{_counts}[$self->{_cdepth}];
+    print STDERR "TABLE: cdepth $self->{_cdepth}, ccount $self->{_ccount}, it: $self->{_in_a_table}\n" if $self->{debug} > 1;
     push(@{$self->{_tablestack}}, {
 				   grab_rows => 1,
 				   in_row    => 0,
@@ -116,17 +120,19 @@ sub end {
       --$ts->{in_cell};
     }
     elsif ($_[0] eq 'table') {
+      # Restore last table
+      pop(@{$self->{_tablestack}});
+      my $lts = $self->_current_table_stats;
       --$self->{_in_a_table};
-      if (@{$self->{_tablestack}}) {
-	$self->{_cdepth} = $ts->{depth};
-	$self->{_ccount} = $ts->{count};
+      if (ref $lts) {
+	$self->{_cdepth} = $lts->{depth};
+	$self->{_ccount} = $self->{_counts}[$lts->{depth}];
       }
       else {
 	$self->{_cdepth} = -1;
 	$self->{_ccount} = $ts->{count};
       }
-      # Get rid of this table's statistics, we're done with it.
-      pop(@{$self->{_tablestack}});
+      print STDERR "LEAVE: cdepth: $self->{_cdepth}, ccount: $self->{_ccount}, it: $self->{_in_a_table}\n" if $self->{debug} > 1;
     }
   }
 }
@@ -281,6 +287,17 @@ sub _map_makes_a_difference {
   $diff;
 }
 
+sub _increment_count {
+  my($self, $depth) = @_;
+  defined $depth or croak "Depth required\n";
+  if ($#{$self->{_counts}} < $depth) {
+    $self->{_counts}[$depth] = 0;
+  }
+  else {
+    ++$self->{_counts}[$depth];
+  }
+}
+
 sub first_table_found {
   my $self = shift;
   $self->{_tables_sequential}[0];
@@ -376,8 +393,8 @@ HTML::TableExtract - Perl extension for extracting the text contained in tables 
  # tables must be within two other tables, plus be the third
  # table at that depth within those tables.  In other words,
  # wherever there exists a table within a table that contains
- # a cell with at least three tables in sequence, we grab
- # the third table. Depth and count both begin with 0.
+ # least three non-nested tables, we grab the third table.
+ # Depth and count both begin with 0.
 
  $te = new HTML::TableExtract( depth => 2, count => 2 );
  $te->parse($html_string);
@@ -414,7 +431,10 @@ more dependencies on the HTML document layout.  I<Depth> represents
 how deeply a table resides in other tables.  The depth of a top-level table
 in the document is 0.  A table within a top-level table has a depth of 1,
 and so on.  I<Count> represents which table at a particular depth you are
-interested in, starting with 0.
+interested in, starting with 0. It might help to picture this as an
+HTML page with a z-axis. Each time you enter a nested table, you go
+down to another layer -- the count represents the ordering of tables
+on that layer.
 
 Each of the I<Headers>, I<Depth>, and I<Count> specifications are cumulative
 in their effect on the overall extraction.  For instance, if you
