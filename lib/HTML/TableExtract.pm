@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);

@@ -1,5 +1,14 @@
 Revision history for Perl extension HTML::TableExtract.
 
+0.05  Tue Mar 21 08:11:54 CST 2000
+	- Pacify PAUSE
+
+0.04  Tue Mar 21 08:01:55 CST 2000
+	- Fixed -w init warnings for dangling columns in header mode
+	- added 'decode' option to turn off text decoding when desired
+	- internally stores real slices right now rather than sparse
+	  tables that later get massaged.
+
 0.03  Thu Mar  9 13:10:03 CST 2000
 	- Fixed bug regarding incomplete defaults
 	- Tables, rows, and cells that are either empty
