@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -23,6 +23,7 @@ my %Defaults = (
 		depth   => undef,
 		count   => undef,
 		automap => 1,
+		debug   => 0,
 	       );
 
 sub new {
@@ -45,7 +46,7 @@ sub new {
 
   my $self = new HTML::Parser @pass;
   bless $self, $class;
-  foreach (keys %parms) {
+  foreach (keys %parms, keys %Defaults) {
     $self->{$_} = exists $parms{$_} ? $parms{$_} : $Defaults{$_};
   }
   if ($self->{headers}) {
@@ -53,7 +54,8 @@ sub new {
       print STDERR "TE here, headers: ", join(',', @{$self->{headers}}),"\n";
     }
     my $hstring = '(' . join('|', map("($_)", @{$self->{headers}})) . ')';
-    $self->{_hpat} = qr($hstring);
+    print STDERR "HPAT: /$hstring/\n" if $self->{debug} >= 2;
+    $self->{_hpat} = qr/$hstring/im;
   }
   $self->{_cdepth} = -1;
   $self->{_ccount} = -1;
@@ -77,26 +79,61 @@ sub start {
     ++$self->{_in_a_table};
     $self->_increment_count($self->{_cdepth});
     $self->{_ccount} = $self->{_counts}[$self->{_cdepth}];
-    print STDERR "TABLE: cdepth $self->{_cdepth}, ccount $self->{_ccount}, it: $self->{_in_a_table}\n" if $self->{debug} > 1;
-    push(@{$self->{_tablestack}}, {
-				   grab_rows => 1,
-				   in_row    => 0,
-				   in_cell   => 0,
-				   depth     => $self->{_cdepth},
-				   count     => $self->{_ccount},
-				   rc        => -1,
-				   cc        => -1,
-				  });
-    $self->_reset_hits($self->_current_table_stats);
+
+    my($depth, $count) = ($self->{_cdepth}, $self->{_ccount});
+    print STDERR "TABLE: cdepth $depth, ccount $count, it: $self->{_in_a_table}\n" if $self->{debug} >= 2;
+
+    my $ts = {
+	      in_row    => 0,
+	      in_cell   => 0,
+	      depth     => $depth,
+	      count     => $count,
+	      rc        => -1,
+	      cc        => -1,
+	      grab      => 1,
+	      content   => [],
+	     };
+    push(@{$self->{_tablestack}}, $ts);
+    $self->_reset_hits($self->_current_table_state);
+
+    # Now we decide if we want to ignore this table
+
+    # If depth or count were specified, they get a vote on the grab.
+    if (defined $self->{count}) {
+      $ts->{grab} = 0 if $ts->{count} != $self->{count};
+    }
+    if (defined $self->{depth}) {
+      $ts->{grab} = 0 if $ts->{depth} != $self->{depth};
+    }
   }
+
+  # Rows and cells
   if ($self->{_in_a_table}) {
+    my $ts = $self->_current_table_state;
     if ($_[0] eq 'tr') {
-      ++$self->_current_table_stats->{in_row};
-      ++$self->_current_table_stats->{rc};
+      croak "Mangled HTML, <TR> with no <TABLE>\n" unless $self->{_in_a_table};
+      ++$ts->{in_row};
+      ++$ts->{rc};
+      if ($ts->{grab}) {
+	# Add a new row to content if applicable
+	push(@{$ts->{content}}, [])
+	  unless $self->{headers} && !$ts->{hslurp};
+      }
     }
     elsif ($_[0] eq 'td' || $_[0] eq 'th') {
-      ++$self->_current_table_stats->{in_cell};
-      ++$self->_current_table_stats->{cc};
+      ++$ts->{in_cell};
+      ++$ts->{cc};
+      if (!$ts->{in_row}) {
+	# We try to be understanding about mangled HTML.
+	++$ts->{in_row};
+	++$ts->{rc};
+	print STDERR "Mangled HTML in table ($ts->{depth},$ts->{count}), inferring <TR> as row $ts->{rc}\n" if $self->{debug};
+      }
+      if ($ts->{grab}) {
+	# Initialize cell values to appease -w
+	$ts->{content}[$ts->{rc}][$ts->{cc}] = ''
+	  unless $self->{headers} && !$ts->{hslurp};
+      }
     }
   }
 }
@@ -104,26 +141,73 @@ sub start {
 sub end {
   my $self = shift;
   if ($self->{_in_a_table}) {
-    my $ts = $self->_current_table_stats;
-    if ($_[0] eq 'tr') {
-      --$ts->{in_row};
-      $ts->{cc} = -1;
-
-      if ($ts->{scanning}) {
-	# Lost our row whilst still gathering headers
-	print STDERR "Lost headers, resetting scan after row $ts->{rc}\n" if $self->{debug};
-	$self->_reset_hits($ts);
+    my $ts = $self->_current_table_state;
+    if ($_[0] eq 'td' || $_[0] eq 'th') {
+      # Scan for headers if they have been provided and this
+      # table has not been vetoed by depth/count specifications
+      if ($self->{headers} && $ts->{grab} && !$ts->{hslurp}) {
+	my $h = $ts->{hits};
+	if ($ts->{htxt} =~ /$self->{_hpat}/) {
+	  my $hit = $1;
+	  print STDERR "HIT on '$hit'\n" if $self->{debug} >= 4;
+	  ++$ts->{scanning};
+	  # Git rid of the pattern that matched so we
+	  # can tell when we're through with all patterns.
+	  foreach (keys %{$ts->{hits_left}}) {
+	    if ($hit =~ /$_/im) {
+	      delete $ts->{hits_left}{$_};
+	      $hit = $_;
+	      last;
+	    }
+	  }
+	  $h->{$ts->{cc}} = $hit;
+	  if (!%{$ts->{hits_left}}) {
+	    # We have found all headers, but we won't
+	    # start slurping until this row has ended
+	    ++$ts->{head_found};
+	    $ts->{scanning} = undef;
+	    # Since we don't return the header row, we
+	    # pretend we never saw it.
+	    --$ts->{rc};
+	    # Remember hits for figuring out the order
+	    $self->{_hits}{$ts->{depth}}{$ts->{count}} = $h;
+	  }
+	}
+	# Reset buffer for next cell
+	$ts->{htxt} = '';
       }
-
-    }
-    elsif ($_[0] eq 'td' || $_[0] eq 'th') {
+      # Done with this cell
       --$ts->{in_cell};
     }
+    elsif ($_[0] eq 'tr') {
+      --$ts->{in_row};
+      $ts->{cc} = -1;
+      if ($self->{headers}) {
+	if ($ts->{scanning}) {
+	  # Lost our row whilst still gathering headers
+	  print STDERR "Incomplete header match in row $ts->{rc}, resetting scan\n" if $self->{debug};
+	  $self->_reset_hits($ts);
+	}
+	# Initiate slurp if we are ending the header row
+	if ($ts->{head_found} && !$ts->{hslurp}) {
+	  ++$ts->{hslurp};
+	  print STDERR "Slurp initiated on row ",$ts->{rc}+2,"\n"
+	    if $self->{debug};
+	}
+      }
+    }
     elsif ($_[0] eq 'table') {
-      # Restore last table
+      if ($ts->{grab}) {
+	# Add our newly captured table, if we actually bothered with it.
+	unless ($self->{headers} && !$ts->{hslurp}) {
+	  $self->_add_table($ts->{content});
+	  print STDERR "Captured table ($ts->{depth},$ts->{count})\n" if $self->{debug} >= 2;
+	}
+      }
+      # Restore last table state
       pop(@{$self->{_tablestack}});
-      my $lts = $self->_current_table_stats;
       --$self->{_in_a_table};
+      my $lts = $self->_current_table_state;
       if (ref $lts) {
 	$self->{_cdepth} = $lts->{depth};
 	$self->{_ccount} = $self->{_counts}[$lts->{depth}];
@@ -132,7 +216,7 @@ sub end {
 	$self->{_cdepth} = -1;
 	$self->{_ccount} = $ts->{count};
       }
-      print STDERR "LEAVE: cdepth: $self->{_cdepth}, ccount: $self->{_ccount}, it: $self->{_in_a_table}\n" if $self->{debug} > 1;
+      print STDERR "LEAVE: cdepth: $self->{_cdepth}, ccount: $self->{_ccount}, it: $self->{_in_a_table}\n" if $self->{debug} >= 2;
     }
   }
 }
@@ -140,90 +224,30 @@ sub end {
 sub text {
   my $self = shift;
   if ($self->{_in_a_table}) {
-    my $ts = $self->_current_table_stats;
+    my $ts = $self->_current_table_state;
     if ($ts->{in_row} && $ts->{in_cell}) {
 
+      if ($self->{headers} && !$ts->{head_found}) {
+	$ts->{htxt} .= $_[0];
+	return;
+      }
+
+      # Initialize grab status
+      my $grab = $ts->{grab};
+
       if ($self->{headers}) {
-	# Scan for headers if they have been provided.
-	my $h = $ts->{hits};
-	
-	if (!$ts->{hslurp}) {
-	  if ($_[0] =~ /($self->{_hpat})/i) {
-	    my $hit = $1;
-	    ++$ts->{scanning};
-	    delete $ts->{hits_left}{$hit};
-	    $h->{$ts->{cc}} = $hit;
-	    if (!%{$ts->{hits_left}}) {
-	      # Don't scoop until next row
-	      $ts->{scanning} = undef;
-	      $ts->{head_found} = $ts->{rc} + 1;
-	      # Remember hits for figuring out the order
-	      $self->{_hits}{$ts->{depth}}{$ts->{count}} = $h;
-	    }
-	  }
+	# Indicate it's time to grab only if we are in an
+	# applicable column.
+	if ($ts->{hslurp}) {
+	  $grab = 0 unless exists $self->_current_hits->{$ts->{cc}};
 	}
-
-	# Indicate the slurp once we are on the row after all headers
-	# were found.
-	if (!$ts->{hslurp} && $ts->{head_found} && $ts->{rc} == $ts->{head_found}) {
-	  print STDERR "Slurp initiated on row $ts->{rc}\n" if $self->{debug};
-	  ++$ts->{hslurp};
-	}
-      }
-
-      my $grab = 0;
-      # If we've found ALL of our headers, indicate it's time to grab
-      # as long as we are in an applicable column.
-      if ($ts->{hslurp}) {
-	if ($self->{headers} && exists $self->_current_hits->{$ts->{cc}}) {
-	  ++$grab unless $grab;
-	}
-      }
-      else {
-	--$grab if $grab;
-      }
-      
-      # If depth or count were specified, they get a vote on the grab as
-      # well.
-      if (defined $self->{count}) {
-	if ($ts->{count} ne $self->{_ccount}) {
-	  --$grab if $grab;
-	}
-	else {
-	  ++$grab unless $grab;
-	}
-      }
-      if (defined $self->{depth}) {
-	if ($ts->{depth} ne $self->{_cdepth}) {
-	  --$self->{grab} if $self->{grab};
-	}
-	else {
-	  ++$grab unless $grab;
-	}
-      }
-
-      # Let the degenerate case have a vote as well -- we take every
-      # table in the document in these cases.
-      if (!$self->{headers} && ! defined $self->{depth} && ! defined $self->{count}) {
-	++$grab;
       }
 
       if ($grab) {
-	# The ayes have it.
-	my $table;
-	if (!$self->{_tables}{$ts->{depth}}{$ts->{count}}) {
-	  $table = [];
-	  $self->{_tables}{$ts->{depth}}{$ts->{count}} = $table;
-	  push(@{$self->{_tables_sequential}}, $table);
-	  $self->{_table_coords}{$table} = [$ts->{depth}, $ts->{count}];
-	}
-	else {
-	  $table = $self->_current_table;
-	}
-	# At long last, we grab some content.
+	# The ayes have it, we grab some content.
 	my $txt = decode_entities($_[0]);
-	$table->[$ts->{rc}][$ts->{cc}] .= $txt;
-	return $txt;
+	$ts->{content}[$ts->{rc}][$ts->{cc}] .= $txt;
+	return $_[0];
       }
     }
   }
@@ -271,6 +295,14 @@ sub rows {
     $table = \@rows;
   }
   @{$table};
+}
+
+sub _add_table {
+  my($self, $table) = @_;
+  croak "Table ref required\n" unless ref $table;
+  $self->{_tables}{$self->{_cdepth}}{$self->{_ccount}} = $table;
+  push(@{$self->{_tables_sequential}}, $table);
+  $self->{_table_coords}{$table} = [$self->{_cdepth}, $self->{_ccount}];
 }
 
 sub _map_makes_a_difference {
@@ -337,12 +369,7 @@ sub column_map {
   }
 }
 
-sub _current_table {
-  my $self = shift;
-  $self->{_tables_sequential}[$#{$self->{_tables_sequential}}];
-}
-
-sub _current_table_stats {
+sub _current_table_state {
   my $self = shift;
   $self->{_tablestack}[$#{$self->{_tablestack}}];
 }
@@ -353,12 +380,12 @@ sub _current_hits {
 }
 
 sub _reset_hits {
-  my($self, $table_stats) = @_;
+  my($self, $table_state) = @_;
   return unless $self->{headers};
-  ref $table_stats or croak "Table stats as ref required\n";
-  $table_stats->{hits} = {};
+  ref $table_state or croak "Table stats as ref required\n";
+  $table_state->{hits} = {};
   foreach (@{$self->{headers}}) {
-    ++$table_stats->{hits_left}{$_};
+    ++$table_state->{hits_left}{$_};
   }
 }
 __END__

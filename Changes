@@ -1,5 +1,15 @@
 Revision history for Perl extension HTML::TableExtract.
 
+0.03  Thu Mar  9 13:10:03 CST 2000
+	- Fixed bug regarding incomplete defaults
+	- Tables, rows, and cells that are either empty
+          or contain no text are now properly noted
+	- Header patterns now match across stripped tags
+	- In some cases, mangled HTML tables are properly
+	  scanned by inferring missing <TR> tags.
+	- Depth/Count votes are now properly honored.
+	- Cleaned up some -w noise.
+
 0.02  Thu Feb 10 13:43:04 CST 2000
 	- Fixed some problems tracking counts at revisited depths.
 	- Minor doc fix, added mailing list
