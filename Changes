@@ -1,5 +1,12 @@
 Revision history for Perl extension HTML::TableExtract.
 
+1.08  Thu Apr  4 11:26:27 CST 2002
+	- Added some more crufty HTML tolerance -- not
+	  PC (puristicly correct) but HTML correctness
+	  is probably of no interest to those merely
+	  trying to extract information *out* of HTML.
+	- Fixed a mapback problem with the legacy methods
+
 1.07  Wed Aug 22 06:14:24 CDT 2001
 	- Added keep_html option for HTML retention
 	- bug fix for depth/count targets

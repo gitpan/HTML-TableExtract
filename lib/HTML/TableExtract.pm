@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.07';
+$VERSION = '1.08';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -98,17 +98,12 @@ sub start {
   # tags if we aren't in a table.
   if ($self->{_in_a_table}) {
     my $ts = $self->_current_table_state;
-    $self->text($_[3]) if $self->{keep_html} && $ts->{in_cell};
+    my $skiptag = 0;
     if ($_[0] eq 'tr') {
       $ts->_enter_row;
+      ++$skiptag;
     }
     elsif ($_[0] eq 'td' || $_[0] eq 'th') {
-      if (!$ts->{in_row}) {
-	# Go ahead and try to recover from mangled HTML, because we
-	# care.
-	$ts->_enter_row;
-	print STDERR "Mangled HTML in table ($ts->{depth},$ts->{count}), inferring <TR> as row $ts->{rc}\n" if $self->{debug};
-      }
       $ts->_enter_cell;
       # Inspect rowspan/colspan attributes, record as necessary for
       # future column count transforms.
@@ -118,6 +113,10 @@ sub start {
 	  $ts->_skew($attrs{rowspan} || 1, $attrs{colspan} || 1);
 	}
       }
+      ++$skiptag;
+    }
+    if ($self->{keep_html} && !$skiptag) {
+      $self->text($_[3]);
     }
   }
 
@@ -222,7 +221,7 @@ sub first_table_state_found {
 sub tables {
   # Return content of all valid tables found, in the order that
   # they were seen.
-  map([$_->rows], shift->table_states(@_));
+  map($_->{content}, shift->table_states(@_));
 }
   
 sub table_states {
@@ -361,6 +360,10 @@ sub _enter_table {
 sub _exit_table {
   my $self = shift;
   my $ts = $self->_current_table_state;
+
+  # Last ditch fix for HTML mangle
+  $ts->_exit_cell if $ts->{in_cell};
+  $ts->_exit_row if $ts->{in_row};
 
   if ($ts->_active) {
     # Retain our newly captured table, assuming we bothered with it.
@@ -750,6 +753,7 @@ sub _current_table_state {
   sub _enter_row {
     my $self = shift;
     $self->_exit_cell if $self->{in_cell};
+    $self->_exit_row if $self->{in_row};
     ++$self->{rc};
     ++$self->{in_row};
 
@@ -771,31 +775,51 @@ sub _current_table_state {
 
   sub _exit_row {
     my $self = shift;
-    $self->_exit_cell if $self->{in_cell};
-    $self->{in_row} = 0;
-    $self->{cc} = -1;
-    $self->_reset_header_scanners;
-    if ($self->_terminus_headers && $self->_still_in_header_row) {
-      ++$self->{hslurp};
-      # Store header row number so that we can adjust later (we keep
-      # it around for now in case of skew situations, which are in
-      # absolute row terms)
-      $self->{hrow} = $self->{rc};
+    if ($self->{in_row}) {
+      $self->_exit_cell if $self->{in_cell};
+      $self->{in_row} = 0;
+      $self->{cc} = -1;
+      $self->_reset_header_scanners;
+      if ($self->_terminus_headers && $self->_still_in_header_row) {
+        ++$self->{hslurp};
+        # Store header row number so that we can adjust later (we keep
+        # it around for now in case of skew situations, which are in
+        # absolute row terms)
+        $self->{hrow} = $self->{rc};
+      }
+    }
+    else {
+      print STDERR "Mangled HTML in table ($self->{depth},$self->{count}), extraneous </TR> ignored after row $self->{rc}\n"
+        if $self->{debug};
     }
   }
 
   sub _enter_cell {
     my $self = shift;
+    $self->_exit_cell if $self->{in_cell};
+    if (!$self->{in_row}) {
+      # Go ahead and try to recover from mangled HTML, because we
+      # care.
+      print STDERR "Mangled HTML in table ($self->{depth},$self->{count}), inferring <TR> as row $self->{rc}\n"
+        if $self->{debug};
+      $self->_enter_row;
+    }
     ++$self->{cc};
     ++$self->{in_cell};
   }
 
   sub _exit_cell {
     my $self = shift;
-    # Trigger taste_text just in case this was an empty cell.
-    $self->_taste_text(undef) if $self->_text_hungry;
-    $self->{in_cell} = 0;
-    $self->_hmatch;
+    if ($self->{in_cell}) {
+      # Trigger taste_text just in case this was an empty cell.
+      $self->_taste_text(undef) if $self->_text_hungry;
+      $self->{in_cell} = 0;
+      $self->_hmatch;
+    }
+    else {
+      print STDERR "Mangled HTML in table ($self->{depth},$self->{count}), extraneous </TD> ignored in row $self->{rc}\n"
+        if $self->{debug};
+    }
   }
 
   ###
@@ -1834,7 +1858,7 @@ Matthew P. Sisk, E<lt>F<sisk@mojotoad.com>E<gt>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000-2001 Matthew P. Sisk.
+Copyright (c) 2000-2002 Matthew P. Sisk.
 All rights reserved. All wrongs revenged. This program is free
 software; you can redistribute it and/or modify it under the
 same terms as Perl itself.
