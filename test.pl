@@ -38,21 +38,21 @@ $tcount = 2;
 
 # For dataset 'chain'
 @LINEAGE_DATA = (
-		 [ "0,0", "1,0", "2,0", "3,0" ],
-		 [ "0,0", "1,0", "2,0", "3,1" ],
-		 [ "0,0", "1,0", "2,0" ],
-		 [ "0,0", "1,0", "2,1", "3,2" ],
-		 [ "0,0", "1,0", "2,1", "3,3" ],
-		 [ "0,0", "1,0", "2,1" ],
-		 [ "0,0", "1,0" ],
-		 [ "0,0", "1,1", "2,2", "3,4" ],
-		 [ "0,0", "1,1", "2,2", "3,5" ],
-		 [ "0,0", "1,1", "2,2" ],
-		 [ "0,0", "1,1", "2,3", "3,6" ],
-		 [ "0,0", "1,1", "2,3", "3,7" ],
-		 [ "0,0", "1,1", "2,3" ],
-		 [ "0,0", "1,1" ],
-		 [ "0,0" ]
+		 [ '0,0,1,0', '1,0,1,0', '2,0,1,0', '3,0' ],
+		 [ '0,0,1,0', '1,0,1,0', '2,0,2,1', '3,1' ],
+		 [ '0,0,1,0', '1,0,1,0', '2,0' ],
+		 [ '0,0,1,0', '1,0,2,1', '2,1,1,1', '3,2' ],
+		 [ '0,0,1,0', '1,0,2,1', '2,1,2,0', '3,3' ],
+		 [ '0,0,1,0', '1,0,2,1', '2,1' ],
+		 [ '0,0,1,0', '1,0' ],
+		 [ '0,0,2,1', '1,1,1,1', '2,2,1,0', '3,4' ],
+		 [ '0,0,2,1', '1,1,1,1', '2,2,2,1', '3,5' ],
+		 [ '0,0,2,1', '1,1,1,1', '2,2' ],
+		 [ '0,0,2,1', '1,1,2,0', '2,3,1,1', '3,6' ],
+		 [ '0,0,2,1', '1,1,2,0', '2,3,2,0', '3,7' ],
+		 [ '0,0,2,1', '1,1,2,0', '2,3' ],
+		 [ '0,0,2,1', '1,1' ],
+		 [ '0,0' ]
 		);
 
 # For data set 'basic'
@@ -95,7 +95,7 @@ $pass = 0 unless good_chain_data($te, $label);
 foreach $tsc (0 .. $#tablestates) {
   $ts = $tablestates[$tsc];
   foreach (0 .. $#{$ts->{lineage}}) {
-    $pass = 0 unless $ts->{lineage}[$_] eq $LINEAGE_DATA[$tsc][$_];
+    $pass = 0 unless join(',', @{$ts->{lineage}[$_]}) eq $LINEAGE_DATA[$tsc][$_];
   }
 }
 print $pass ? "ok " : "not ok ";
@@ -121,9 +121,9 @@ printf "%2d (by count)\n", $tcount;
 
 # By depth
 $pass = 1;
-$te = new HTML::TableExtract(
-			     depth => 1,
-			    );
+$te = HTML::TableExtract->new(
+  depth => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $pass = 0 unless @tablestates == 2;
@@ -134,11 +134,26 @@ print $pass ? "ok " : "not ok ";
 printf "%2d (by depth)\n", $tcount;
 ++$tcount;
 
+# By attribute
+$pass = 1;
+$te = HTML::TableExtract->new(
+  attribs => { border => 1 },
+);
+$te->parse($html);
+@tablestates = $te->table_states;
+$pass = 0 unless @tablestates == 3;
+foreach (@tablestates) {
+  $pass = 0 unless good_data($_);
+}
+print $pass ? "ok " : "not ok ";
+printf "%2d (by attribute)\n", $tcount;
+++$tcount;
+
 # By header
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [qw(Eight Six Four Two Zero)],
-			    );
+$te = HTML::TableExtract->new(
+  headers => [qw(Eight Six Four Two Zero)],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $pass = 0 unless @tablestates == 5;
@@ -152,10 +167,10 @@ printf "%2d (by header)\n", $tcount;
 
 # By depth and count
 $pass = 1;
-$te = new HTML::TableExtract(
-			     depth     => 0,
-			     count     => 2,
-			    );
+$te = HTML::TableExtract->new(
+  depth     => 0,
+  count     => 2,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $pass = 0 unless @tablestates == 1;
@@ -169,11 +184,11 @@ printf "%2d (by depth and count)\n", $tcount;
 
 # By subtable scoop
 $pass = 1;
-$te = new HTML::TableExtract(
-			     depth     => 0,
-			     count     => 2,
-			     subtables => 1,
-			    );
+$te = HTML::TableExtract->new(
+  depth     => 0,
+  count     => 2,
+  subtables => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $pass = 0 unless @tablestates == 3;
@@ -190,9 +205,9 @@ $html = $docs{skew};
 
 # Column skew
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [ qw(head0 head1 head2 head3) ],
-			    );
+$te = HTML::TableExtract->new(
+  headers => [ qw(head0 head1 head2 head3) ],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $pass = 0 unless @tablestates == 1;
@@ -203,9 +218,9 @@ printf "%2d (by header with span correction)\n", $tcount;
 
 # Column skew and column mapping
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [ qw(head3 head2 head1 head0) ],
-			    );
+$te = HTML::TableExtract->new(
+  headers => [ qw(head3 head2 head1 head0) ],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $pass = 0 unless @tablestates == 1;
@@ -219,12 +234,10 @@ $html = $docs{chain};
 
 # Depth to depth chaining
 $pass = 1;
-$te = new HTML::TableExtract(
-			     depth => 1,
-			     chain => [
-				       { depth => 1 }
-				      ],
-			    );
+$te = HTML::TableExtract->new(
+  depth => 1,
+  chain => [ { depth => 1 } ],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'd2cd1a';
@@ -236,13 +249,11 @@ printf "%2d (by depth to chain depth)\n", $tcount;
 
 # Depth to depth chaining, keep global
 $pass = 1;
-$te = new HTML::TableExtract(
-			     depth => 1,
-			     keep  => 1,
-			     chain => [
-				       { depth => 1 }
-				      ],
-			    );
+$te = HTML::TableExtract->new(
+  depth => 1,
+  keep  => 1,
+  chain => [ { depth => 1 } ],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'd2cd1b';
@@ -254,12 +265,10 @@ printf "%2d (by depth to chain depth, retain global)\n", $tcount;
 
 # Count to count chaining
 $pass = 1;
-$te = new HTML::TableExtract(
-			     count => 1,
-			     chain => [
-				       { count => 1 }
-				      ],
-			    );
+$te = HTML::TableExtract->new(
+  count => 1,
+  chain => [ { count => 1 } ],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'c2cc1a';
@@ -271,13 +280,11 @@ printf "%2d (by count to chain count)\n", $tcount;
 
 # Count to count chaining, keep global
 $pass = 1;
-$te = new HTML::TableExtract(
-			     count => 1,
-			     keep  => 1,
-			     chain => [
-				       { count => 1 }
-				      ],
-			    );
+$te = HTML::TableExtract->new(
+  count => 1,
+  keep  => 1,
+  chain => [ { count => 1 } ],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'c2cc1b';
@@ -291,12 +298,10 @@ printf "%2d (by count to chain count, retain global)\n", $tcount;
 # Note: this should demonstrate the "bug" of not matching subtables until
 # a complete header match is obtained...
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
-			     chain => [
-				       { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] }
-				      ],
-			    );
+$te = HTML::TableExtract->new(
+  headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
+  chain => [ { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] } ],
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'h2ch1a';
@@ -310,13 +315,11 @@ printf "%2d (by header to chain header)\n", $tcount;
 # Note: this should demonstrate the "bug" of not matching subtables until
 # a complete header match is obtained...
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
-			     chain   => [
-					 { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] }
-					],
-			     keep    => 1,
-			    );
+$te = HTML::TableExtract->new(
+  headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
+  chain   => [ { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] } ],
+  keep    => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'h2ch1b';
@@ -328,14 +331,14 @@ printf "%2d (by header to chain header, retain global)\n", $tcount;
 
 # Depth to waypoint depth to terminus depth chaining
 $pass = 1;
-$te = new HTML::TableExtract(
-			     depth => 1,
-			     chain => [
-				       { depth => 0 },
-				       { depth => 0 }
-				      ],
-			     keep  => 1,
-			    );
+$te = HTML::TableExtract->new(
+  depth => 1,
+  chain => [
+            { depth => 0 },
+	    { depth => 0 }
+	   ],
+  keep  => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'd2cd2';
@@ -347,14 +350,14 @@ printf "%2d (by depth to chain depth with depth waypoint, retain global)\n", $tc
 
 # Count to count waypoint to count terminus chaining
 $pass = 1;
-$te = new HTML::TableExtract(
-			     count => 0,
-			     chain => [
-				       { count => 1 },
-				       { count => 1 }
-				      ],
-			     keep  => 1,
-			    );
+$te = HTML::TableExtract->new(
+  count => 0,
+  chain => [
+            { count => 1 },
+            { count => 1 }
+           ],
+  keep  => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'c2cc2';
@@ -366,14 +369,14 @@ printf "%2d (by count to chain count with count waypoint, retain global)\n", $tc
 
 # Header to header waypoint to header terminus chaining
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
-			     chain   => [
-					 { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
-					 { headers => [ '\(0,0\)', '\(0,1\)' ] }
-					],
-			     keep    => 1,
-			    );
+$te = HTML::TableExtract->new(
+  headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
+  chain   => [
+              { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
+              { headers => [ '\(0,0\)', '\(0,1\)' ] }
+             ],
+  keep    => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'h2ch2';
@@ -385,15 +388,15 @@ printf "%2d (by header to chain header with header waypoint, retain global)\n", 
 
 # Count to count waypoint to count terminus chaining, non-elastic
 $pass = 1;
-$te = new HTML::TableExtract(
-			     count   => 0,
-			     chain   => [
-					 { count => 1 },
-					 { count => 1 }
-					],
-			     elastic => 0,
-			     keep    => 1,
-			    );
+$te = HTML::TableExtract->new(
+  count   => 0,
+  chain   => [
+              { count => 1 },
+              { count => 1 }
+             ],
+  elastic => 0,
+  keep    => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'c2cc3';
@@ -405,15 +408,15 @@ printf "%2d (by count to chain count with count waypoint, non-elastic, retain gl
 
 # Header to header waypoint to header terminus chaining, non-elastic
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
-			     chain   => [
-					 { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
-					 { headers => [ '\(0,0\)', '\(0,1\)' ] }
-					],
-			     elastic => 0,
-			     keep    => 1,
-			    );
+$te = HTML::TableExtract->new(
+  headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
+  chain   => [
+              { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
+              { headers => [ '\(0,0\)', '\(0,1\)' ] }
+             ],
+  elastic => 0,
+  keep    => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'h2ch3';
@@ -425,14 +428,14 @@ printf "%2d (by header to chain header with header waypoint, non-elastic, retain
 
 # Header to header waypoint to header terminus chaining, keep all waypoints
 $pass = 1;
-$te = new HTML::TableExtract(
-			     headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
-			     chain   => [
-					 { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
-					 { headers => [ '\(0,0\)', '\(0,1\)' ] }
-					],
-			     keepall => 1,
-			    );
+$te = HTML::TableExtract->new(
+  headers => [ '0,0: \(0,0\)', '0,0: \(0,1\)' ],
+  chain   => [
+              { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
+              { headers => [ '\(0,0\)', '\(0,1\)' ] }
+             ],
+  keepall => 1,
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'h2ch4';
@@ -444,13 +447,13 @@ printf "%2d (by header to chain header with header waypoint, retain all waypoint
 
 # Depth to header waypoint to count terminus
 $pass = 1;
-$te = new HTML::TableExtract(
-			     depth   => 1,
-			     chain   => [
-					 { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
-					 { count   => 1 },
-					],	
-			    );
+$te = HTML::TableExtract->new(
+  depth   => 1,
+  chain   => [
+              { headers => [ '1: \(0,0\)', '1: \(0,1\)' ] },
+              { count   => 1 },
+             ],	
+);
 $te->parse($html);
 @tablestates = $te->table_states;
 $label = 'd2h2c';
@@ -541,10 +544,10 @@ $doc1 = <<__DOC1;
 <table border=1><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)</td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)</td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table>
 
 <h3>Here lies Table 2:</h3>
-<table border=1><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)</td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)</td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table>
+<table border=2><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)</td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)</td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table>
 
 <h3>Here lies Table 3 with 4 and 5 inside:</h3>
-<table border=1><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)<table border=1><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)</td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)</td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table></td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)<table border=1><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)</td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)</td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table></td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table>
+<table border=1><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)<table border=1><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)</td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)</td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table></td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)<table border=2><tr><td>Header Zero</td><td>Header One</td><td>Header Two</td><td>Header Three</td><td>Header Four</td><td>Header Five</td><td>Header Six</td><td>Header Seven</td><td>Header Eight</td><td>Header Nine</td></tr><tr><td> (1,0)</td><td> (1,1)</td><td> (1,2)</td><td> (1,3)</td><td> (1,4)</td><td> (1,5)</td><td> (1,6)</td><td> (1,7)</td><td> (1,8)</td><td> (1,9)</td></tr><tr><td> (2,0)</td><td> (2,1)</td><td> (2,2)</td><td> (2,3)</td><td> (2,4)</td><td> (2,5)</td><td> (2,6)</td><td> (2,7)</td><td> (2,8)</td><td> (2,9)</td></tr><tr><td> (3,0)</td><td> (3,1)</td><td> (3,2)</td><td> (3,3)</td><td> (3,4)</td><td> (3,5)</td><td> (3,6)</td><td> (3,7)</td><td> (3,8)</td><td> (3,9)</td></tr><tr><td> (4,0)</td><td> (4,1)</td><td> (4,2)</td><td> (4,3)</td><td> (4,4)</td><td> (4,5)</td><td> (4,6)</td><td> (4,7)</td><td> (4,8)</td><td> (4,9)</td></tr><tr><td> (5,0)</td><td> (5,1)</td><td> (5,2)</td><td> (5,3)</td><td> (5,4)</td><td> (5,5)</td><td> (5,6)</td><td> (5,7)</td><td> (5,8)</td><td> (5,9)</td></tr><tr><td> (6,0)</td><td> (6,1)</td><td> (6,2)</td><td> (6,3)</td><td> (6,4)</td><td> (6,5)</td><td> (6,6)</td><td> (6,7)</td><td> (6,8)</td><td> (6,9)</td></tr><tr><td> (7,0)</td><td> (7,1)</td><td> (7,2)</td><td> (7,3)</td><td> (7,4)</td><td> (7,5)</td><td> (7,6)</td><td> (7,7)</td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table></td><td> (7,8)</td><td> (7,9)</td></tr><tr><td> (8,0)</td><td> (8,1)</td><td> (8,2)</td><td> (8,3)</td><td> (8,4)</td><td> (8,5)</td><td> (8,6)</td><td> (8,7)</td><td> (8,8)</td><td> (8,9)</td></tr><tr><td> (9,0)</td><td> (9,1)</td><td> (9,2)</td><td> (9,3)</td><td> (9,4)</td><td> (9,5)</td><td> (9,6)</td><td> (9,7)</td><td> (9,8)</td><td> (9,9)</td></tr></table>
 
 </body>
 </html>

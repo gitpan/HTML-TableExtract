@@ -8,6 +8,7 @@ Tables of note may be specified using Headers, Depth, Count,
 or some combination of the three. See the module documentation
 for details.
 
+
 INSTALLATION
 
 You install HTML-TableExtract, as you would install any perl module
@@ -17,6 +18,7 @@ library, by running these commands:
    make
    make test
    make install
+
 
 DOCUMENTATION
 
@@ -31,6 +33,7 @@ There is also an example page available:
 
    http://www.mojotoad.com/sisk/projects/HTML-TableExtract/tables.html
 
+
 SUPPORT
 
 There is a mailing list available. To register or examine archived
@@ -39,6 +42,7 @@ messages, go here:
    http://lists.sourceforge.net/mailman/listinfo/table-extract-general
 
 Questions and comments may also be directed to Matt Sisk <sisk@mojotoad.com>
+
 
 AVAILABILITY
 
@@ -50,11 +54,14 @@ The latest version is also available at:
 
    http://www.mojotoad.com/sisk/projects/HTML-TableExtract/
 
+
 ACKNOWLEDGEMENTS
 
-Thanks to the following people for their generous bug catching and
-fault analysis: Celeste Suliin Burris, David Finberg, Robert Goff,
-Jeremy Howard, Patrick Naubert, Volker Stuerzl, and Steve Wong.
+Thanks to the following people for their generous bug catching and fault
+analysis: Celeste Suliin Burris, David Finberg, Robert Goff, Daniel
+Griscom, Jeremy Howard, Martin Joost, Nicholas R. Markham, Patrick
+Naubert, Volker Stuerzl, and Steve Wong.
+
 
 COPYRIGHT
 
