@@ -1,5 +1,8 @@
 Revision history for Perl extension HTML::TableExtract.
 
+1.05  Sun Aug  6 06:38:14 CDT 2000
+	- minor bug fix involving empty cells
+
 1.04  Sat Jul 15 02:18:04 CDT 2000
 	- fixed gridmap bug involving skew calcs on unwanted
           columns
@@ -17,9 +20,6 @@ Revision history for Perl extension HTML::TableExtract.
 	- Documentation rewrite
 
 0.05  Tue Mar 21 08:11:54 CST 2000
-	- Pacify PAUSE
-
-0.04  Tue Mar 21 08:01:55 CST 2000
 	- Fixed -w init warnings for dangling columns in header mode
 	- added 'decode' option to turn off text decoding when desired
 	- internally stores real slices right now rather than sparse

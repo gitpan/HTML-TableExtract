@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.04';
+$VERSION = '1.05';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -98,13 +98,13 @@ sub start {
       $ts->_enter_row;
     }
     elsif ($_[0] eq 'td' || $_[0] eq 'th') {
-      $ts->_enter_cell;
       if (!$ts->{in_row}) {
 	# Go ahead and try to recover from mangled HTML, because we
 	# care.
 	$ts->_enter_row;
 	print STDERR "Mangled HTML in table ($ts->{depth},$ts->{count}), inferring <TR> as row $ts->{rc}\n" if $self->{debug};
       }
+      $ts->_enter_cell;
       # Inspect rowspan/colspan attributes, record as necessary for
       # future column count transforms.
       if ($self->{gridmap}) {
@@ -495,7 +495,6 @@ sub _current_table_state {
     # Gather the provided text, either for header scanning or
     # harvesting.
     my($self, $text) = @_;
-    return unless defined $text;
 
     # Calculate and track skew, regardless of whether we actually want
     # this column or not.
@@ -511,7 +510,7 @@ sub _current_table_state {
     }
     # Regardless of whether or not we are harvesting, we still try to
     # scan for headers in waypoint frames.
-    if ($self->_any_headers && !$self->_any_htrigger) {
+    if (defined $text && $self->_any_headers && !$self->_any_htrigger) {
       $self->_htxt($text);
     }
     1;
@@ -729,7 +728,7 @@ sub _current_table_state {
 
   sub _enter_row {
     my $self = shift;
-    $self->_exit_cell;
+    $self->_exit_cell if $self->{in_cell};
     ++$self->{rc};
     ++$self->{in_row};
 
@@ -772,6 +771,8 @@ sub _current_table_state {
 
   sub _exit_cell {
     my $self = shift;
+    # Trigger taste_text just in case this was an empty cell.
+    $self->_taste_text(undef) if $self->_text_hungry;
     $self->{in_cell} = 0;
     $self->_hmatch;
   }
@@ -1148,8 +1149,14 @@ sub _current_table_state {
 
   sub _add_text {
     my($self, $txt, $skew_column) = @_;
-    defined $txt or return;
+    # We don't check for $txt being defined, sometimes we want to
+    # merely insert a placeholder in the content.
     my $row = $self->{content}[$#{$self->{content}}];
+    if (! defined $row->[$skew_column]) {
+      # Init to appease -w
+      $row->[$skew_column] = '';
+    }
+    return unless defined $txt;
     $row->[$skew_column] .= $txt;
     $txt;
   }
