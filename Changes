@@ -1,5 +1,16 @@
 Revision history for Perl extension HTML::TableExtract.
 
+1.00  Tue Jul  4 00:43:30 CDT 2000
+	- gridmap option, columns are really columns regardless
+	  of cell span skew
+	- Added chains for relative targeting
+	  * Terminus-matching by default
+	  * Elasticity option
+	  * Waypoint retention option
+	  * Lineage tracking (match record along chain)
+	- Significant tests added to 'make test'
+	- Documentation rewrite
+
 0.05  Tue Mar 21 08:11:54 CST 2000
 	- Pacify PAUSE
 
