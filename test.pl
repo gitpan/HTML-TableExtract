@@ -73,7 +73,7 @@ $tcount = 2;
 @SKEW_DATA = (
 	      [ 'THIS IS A WHOLE ROW-CELL OF JUNK','','','' ],
 	      [ 'JUNK','Tasty tidbit (1,1)','JUNK','Tasty tidbit (1,3)' ],
-	      [ '','BIGJUNK','','Tasty tidbit (2,3)' ],
+	      [ '',"BIG\nJUNK",'','Tasty tidbit (2,3)' ],
 	      [ 'Tasty tidbit (3,0)','','','Tasty tidbit (3,3)' ],
 	      [ 'Tasty tidbit (4,0)','','','Tasty tidbit (4,3)' ],
 	      [ 'JUNK BUTTON','','Tasty tidbit (5,2)','Tasty tidbit (5,3)' ],

@@ -1,8 +1,8 @@
 package HTML::TableExtract;
 
-# This package extracts tables from HTML.  Tables of interest may be
+# This package extracts tables from HTML. Tables of interest may be
 # specified using header information, depth, order in a depth, or some
-# combination of the three.  See the POD for more information.
+# combination of the three. See the POD for more information.
 #
 # Author: Matthew P. Sisk. See the POD for copyright information.
 
@@ -11,7 +11,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.05';
+$VERSION = '1.06';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -27,6 +27,7 @@ my %Defaults = (
 		gridmap      => 1,
 		decode       => 1,
 		automap      => 1,
+		br_translate => 1,
 		head_include => 0,
 		elastic      => 1,
 		keep         => 0,
@@ -52,7 +53,7 @@ sub new {
       }
       $parms{$k} = $v;
     }
-    elsif ($k =~ /^$Dpat$/o) {
+    elsif ($k =~ /^$Dpat$/) {
       $parms{$k} = $v;
     }
     else {
@@ -63,7 +64,8 @@ sub new {
   my $self = $class->SUPER::new(%pass);
   bless $self, $class;
   foreach (keys %parms, keys %Defaults) {
-    $self->{$_} = exists $parms{$_} ? $parms{$_} : $Defaults{$_};
+    $self->{$_} = exists $parms{$_} && defined $parms{$_} ?
+      $parms{$_} : $Defaults{$_};
   }
   if ($self->{headers}) {
     print STDERR "TE here, headers: ", join(',', @{$self->{headers}}),"\n"
@@ -77,6 +79,7 @@ sub new {
   $self->{_ts_sequential} = [];
   $self->{_table_mapback} = {};
   $self->{_counts}        = {};
+
   $self;
 }
 
@@ -115,6 +118,16 @@ sub start {
       }
     }
   }
+
+  # <br> patch. We like to dispense with HTML, but blindly zapping
+  # <br> will sometimes make the resulting text hard to parse if there
+  # is no newline. Therefore, when enabled, we replace <br> with
+  # newline. Pointed out by Volker Stuerzl <Volker.Stuerzl@gmx.de>
+  if ($_[0] eq 'br' && $self->{br_translate}) {
+    $self->text("\n");
+  }
+
+
 } # end start
 
 sub end {
@@ -182,7 +195,8 @@ sub table_state {
 }
 
 sub rows {
-  # Return the rows for a table.  First table found if no table specified.
+  # Return the rows for a table. First table found if no table
+  # specified.
   my($self, $table) = @_;
   my @tc;
   if (!$table) {
@@ -372,7 +386,7 @@ sub _add_table_state {
   #
   # These undefs would exist for empty <TD> since text() never got
   # called. Don't want to blindly do this in a start('td') because
-  # headers might have vetoed.  Also track max row length in case we
+  # headers might have vetoed. Also track max row length in case we
   # need to pad the other rows in gridmap mode.
   my $cmax = 0;
   foreach my $r (@{$ts->{content}}) {
@@ -505,8 +519,10 @@ sub _current_table_state {
     # header column, then ignore this text.
     if ($self->_terminus_trigger && $self->_column_wanted ||
 	$self->{umbrella}) {
-      print STDERR "Add text ",join(',', @_),"\n" if $self->{debug} > 3;
-      $self->_add_text($text, $sc);
+      if (defined $text) { # -w appeasement
+	print STDERR "Add text '$text'\n" if $self->{debug} > 3;
+	$self->_add_text($text, $sc);
+      }
     }
     # Regardless of whether or not we are harvesting, we still try to
     # scan for headers in waypoint frames.
@@ -832,6 +848,7 @@ sub _current_table_state {
       if ($self->{debug} > 3) {
 	print STDERR "Adding frame ($f):\n   {\n";
 	foreach (sort keys %$f) {
+	  next unless defined $f->{$_}; # appease -w
 	  print STDERR "    $_ => $f->{$_}\n";
 	}
 	print STDERR "   }\n";
@@ -864,8 +881,8 @@ sub _current_table_state {
   }
 
   sub _hmatch {
-    # Given the current htxt, test all frames for matches.  This
-    # *will* set state in the frames in the event of a match.
+    # Given the current htxt, test all frames for matches. This *will*
+    # set state in the frames in the event of a match.
     my $self = shift;
     my @hits;
     return 0 unless $self->_any_headers;
@@ -1117,7 +1134,7 @@ sub _current_table_state {
     my $tframe = ref $tframes ? $tframes->[0] : undef;
     if ($tframe && $tframe->{headers}) {
       # First we order the original column counts by taking a hash
-      # slice based on the original header order.  The resulting
+      # slice based on the original header order. The resulting
       # original column numbers are mapped to the actual content
       # indicies since we could have a sparse slice.
       my %order;
@@ -1318,7 +1335,7 @@ HTML::TableExtract - Perl extension for extracting the text contained in tables 
  # matched using column headers, depth, count within a depth, or some
  # combination of the three.
 
- # Using column header information.  Assume an HTML document with
+ # Using column header information. Assume an HTML document with
  # tables that have "Date", "Price", and "Cost" somewhere in a
  # row. The columns beneath those headings are what you want to
  # extract. They will be returned in the same order as you specified
@@ -1350,7 +1367,7 @@ HTML::TableExtract - Perl extension for extracting the text contained in tables 
     print join(',', @$row), "\n";
  }
 
- # Using depth and count information.  Every table in the document has
+ # Using depth and count information. Every table in the document has
  # a unique depth and count tuple, so when both are specified it is a
  # unique table. Depth and count both begin with 0, so in this case we
  # are looking for a table (depth 2) within a table (depth 1) within a
@@ -1381,10 +1398,10 @@ I<Count>.
 
 I<Headers>, the most flexible and adaptive of the techniques, involves
 specifying text in an array that you expect to appear above the data
-in the tables of interest.  Once all headers have been located in a
-row of that table, all further cells beneath the columns that matched
-your headers are extracted. All other columns are ignored: think of it
-as vertical slices through a table.  In addition, TableExtract
+in the tables of interest. Once all headers have been located in a row
+of that table, all further cells beneath the columns that matched your
+headers are extracted. All other columns are ignored: think of it as
+vertical slices through a table. In addition, TableExtract
 automatically rearranges each row in the same order as the headers you
 provided. If you would like to disable this, set I<automap> to 0
 during object creation, and instead rely on the column_map() method to
@@ -1396,24 +1413,24 @@ parameter to 0. HTML is stripped from the entire textual content of a
 cell before header matches are attempted.
 
 I<Depth> and I<Count> are more specific ways to specify tables in
-relation to one another.  I<Depth> represents how deeply a table
-resides in other tables.  The depth of a top-level table in the
-document is 0.  A table within a top-level table has a depth of 1, and
-so on.  Each depth can be thought of as a layer; tables sharing the
+relation to one another. I<Depth> represents how deeply a table
+resides in other tables. The depth of a top-level table in the
+document is 0. A table within a top-level table has a depth of 1, and
+so on. Each depth can be thought of as a layer; tables sharing the
 same depth are on the same layer. Within each of these layers,
 I<Count> represents the order in which a table was seen at that depth,
 starting with 0. Providing both a I<depth> and a I<count> will
 uniquely specify a table within a document.
 
 Each of the I<Headers>, I<Depth>, and I<Count> specifications are
-cumulative in their effect on the overall extraction.  For instance,
-if you specify only a I<Depth>, then you get all tables at that depth
+cumulative in their effect on the overall extraction. For instance, if
+you specify only a I<Depth>, then you get all tables at that depth
 (note that these could very well reside in separate higher-level
 tables throughout the document since depth extends across tables). If
 you specify only a I<Count>, then the tables at that I<Count> from all
 depths are returned (i.e., the I<n>th occurrence of a table at each
-depth).  If you only specify I<Headers>, then you get all tables in
-the document containing those column headers.  If you have specified
+depth). If you only specify I<Headers>, then you get all tables in the
+document containing those column headers. If you have specified
 multiple constraints of I<Headers>, I<Depth>, and I<Count>, then each
 constraint has veto power over whether a particular table is
 extracted.
@@ -1562,7 +1579,7 @@ document, which is exactly what occurred in the prior example.
 
 The main point of this module was to provide a flexible method of
 extracting tabular information from HTML documents without relying to
-heavily on the document layout.  For that reason, I suggest using
+heavily on the document layout. For that reason, I suggest using
 I<Headers> whenever possible -- that way, you are anchoring your
 extraction on what the document is trying to communicate rather than
 some feature of the HTML comprising the document (other than the fact
@@ -1570,7 +1587,7 @@ that the data is contained in a table).
 
 HTML::TableExtract is a subclass of HTML::Parser, and as such inherits
 all of its basic methods. In particular, C<start()>, C<end()>, and
-C<text()> are utilized.  Feel free to override them, but if you do not
+C<text()> are utilized. Feel free to override them, but if you do not
 eventually invoke them in the SUPER class with some content, results
 are not guaranteed.
 
@@ -1590,14 +1607,14 @@ equivalent table state methods.
 
 =item new()
 
-Return a new HTML::TableExtract object.  Valid attributes are:
+Return a new HTML::TableExtract object. Valid attributes are:
 
 =over
 
 =item headers
 
 Passed as an array reference, headers specify strings of interest at
-the top of columns within targeted tables.  These header strings will
+the top of columns within targeted tables. These header strings will
 eventually be passed through a non-anchored, case-insensitive regular
 expression, so regexp special characters are allowed. The table row
 containing the headers is B<not> returned. Columns that are not
@@ -1611,7 +1628,7 @@ I<gridmap> parameter for more information.
 =item depth
 
 Specify how embedded in other tables your tables of interest should
-be.  Top-level tables in the HTML document have a depth of 0, tables
+be. Top-level tables in the HTML document have a depth of 0, tables
 within top-level tables have a depth of 1, and so on.
 
 =item count
@@ -1667,7 +1684,12 @@ Extract all tables within matched tables.
 =item decode
 
 Automatically decode retrieved text with
-HTML::Entities::decode_entities().  Enabled by default.
+HTML::Entities::decode_entities(). Enabled by default.
+
+=item br_translate
+
+Translate <br> tags into newlines. Sometimes the remaining text can be
+hard to parse if the <br> tag is simply dropped. Enabled by default.
 
 =item debug
 
@@ -1806,3 +1828,35 @@ same terms as Perl itself.
 HTML::Parser(3), perl(1).
 
 =cut
+
+In honor of fragmented markup languages and sugar mining:
+
+The Good and The Bad
+Ted Hawkins (1936-1994)
+
+Living is good
+   when you have someone to share it with
+Laughter is bad
+   when there is no one there to share it with
+Talking is sad 
+   if you've got no one to talk to
+Dying is good
+   when the one you love grows tired of you
+
+Sugar is no good
+   once it's cast among the white sand
+What the point
+   in pulling the gray hairs from among the black strands
+When you're old
+   you shouldn't walk in the fast lane
+Oh ain't it useless
+   to keep trying to draw true love from that man
+
+He'll hurt you,
+   Yes just for the sake of hurting you
+and he'll hate you
+   if you try to love him just the same
+He'll use you
+   and everything you have to offer him
+On your way girl
+   Get out and find you someone new

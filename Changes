@@ -1,5 +1,9 @@
 Revision history for Perl extension HTML::TableExtract.
 
+1.06  Thu Nov  2 15:29:49 CST 2000
+	- Added <br> translation to newlines (enabled by default)
+	- cleaned up some warnings
+
 1.05  Sun Aug  6 06:38:14 CDT 2000
 	- minor bug fix involving empty cells
 
