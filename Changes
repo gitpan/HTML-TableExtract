@@ -1,5 +1,10 @@
 Revision history for Perl extension HTML::TableExtract.
 
+1.10  Mon Mar  7 10:45:54 EST 2005
+        - Minor fix to resets during calls to parse(). Resets must be
+          requested manually.
+        - Docs update to reflect impending arrival of 2.x series.
+
 1.09  Fri Feb 25 17:49:00 EST 2005
         - Tables can now be selected by table tag attributes
         - lineage() method now returns row and column information, as

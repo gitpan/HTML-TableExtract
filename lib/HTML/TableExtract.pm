@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '1.09';
+$VERSION = '1.10';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -165,13 +165,6 @@ sub text {
       }
     }
   }
-}
-
-sub parse {
-  # for resetting state in case one object is used for repeated parsings
-  my $self = shift;
-  $self->reset_state;
-  $self->SUPER::parse(@_);
 }
 
 ### End HTML::Parser overrides
@@ -1661,6 +1654,11 @@ tables within an HTML document.
 
 =head1 DESCRIPTION
 
+NOTE FOR VERSION 1.10: This will be the last version before the 2.x
+series starts. There WILL be backwards incompatibilities introduced in
+the 2.x series. In particular, note the deprecated methods below. In
+addition, chaining capability will be removed entirely.
+
 HTML::TableExtract is a subclass of HTML::Parser that serves to extract
 the textual information from tables of interest contained within an HTML
 document. The text from each extracted table is stored in tabe state
@@ -2051,6 +2049,11 @@ C<$col_sep>. Default C<$col_sep> is ':'.
 =item tables_dump([$show_content, $col_sep])
 
 Same as C<tables_report()> except dump the information to STDOUT.
+
+=item reset_state()
+
+If you are using the same HTML::TableExtract object for multiple parses,
+call this between each parse to wipe the internal slate clean.
 
 =head2 TABLE STATE METHODS
 
