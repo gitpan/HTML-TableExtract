@@ -1,12 +1,12 @@
 HTML-TableExtract
 -----------------
 
-HTML::TableExtract is a module that simplifies the extraction
-of information contained in tables within HTML documents.
+HTML::TableExtract is a module that simplifies the extraction of
+information contained in tables within HTML documents.
 
 Tables of note may be specified using Headers, Depth, Count,
-or some combination of the three. See the module documentation
-for details.
+Attributes, or some combination of the three. See the module
+documentation for details.
 
 
 INSTALLATION
@@ -22,12 +22,11 @@ library, by running these commands:
 
 DOCUMENTATION
 
-See HTML/TableExtract.pm for the code. See Changes for recent
-changes.  POD style documentation is included in the module.
-This is normally converted to a manual page and installed as part
-of the "make install" process.  You should also be able to use
-the 'perldoc' utility to extract and read documentation from the
-module directly.
+See HTML/TableExtract.pm for the code. See Changes for recent changes.
+POD style documentation is included in the module. This is normally
+converted to a manual page and installed as part of the "make install"
+process. You should also be able to use the 'perldoc' utility to extract
+and read documentation from the module directly.
 
 There is also an example page available:
 
@@ -41,7 +40,8 @@ messages, go here:
 
    http://lists.sourceforge.net/mailman/listinfo/table-extract-general
 
-Questions and comments may also be directed to Matt Sisk <sisk@mojotoad.com>
+Questions and comments may also be directed to Matt Sisk
+<sisk@mojotoad.com>
 
 
 AVAILABILITY
@@ -57,15 +57,14 @@ The latest version is also available at:
 
 ACKNOWLEDGEMENTS
 
-Thanks to the following people for their generous bug catching and fault
-analysis: Celeste Suliin Burris, David Finberg, Robert Goff, Daniel
-Griscom, Jeremy Howard, Martin Joost, Nicholas R. Markham, Patrick
-Naubert, Volker Stuerzl, and Steve Wong.
+Thanks to the following people for their generous bug catching, fault
+analysis, and suggestions: Celeste Suliin Burris, David Finberg, Robert
+Goff, Daniel Griscom, Jeremy Howard, Martin Joost, Nicholas R. Markham,
+Julian Mehnle, Patrick Naubert, Volker Stuerzl, and Steve Wong.
 
 
 COPYRIGHT
 
-Copyright (c) 1999-2002 Matthew P. Sisk.  All rights reserved.
-All wrongs revenged. This program is free software; you can
-redistribute it and/or modify it under the same terms as
-Perl itself.
+Copyright (c) 1999-2005 Matthew P. Sisk. All rights reserved. All wrongs
+revenged. This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.

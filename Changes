@@ -1,9 +1,21 @@
-Revision history for Perl extension HTML::TableExtract.
+Revision history for HTML::TableExtract
 
-1.10  Mon Mar  7 10:45:54 EST 2005
-        - Minor fix to resets during calls to parse(). Resets must be
-          requested manually.
-        - Docs update to reflect impending arrival of 2.x series.
+2.00  Fri Jun 17 17:28:10 EDT 2005
+        - Can now return parsed tables as HTML::TableElement objects
+          within an HTML::Element tree structure (via HTML::TreeBuilder)
+          for such purposes as in-line editing of table content within
+          documents. Invoked via 'use HTML::TableExtract qw(tree);'.
+        - Added columns(), row(), column(), and cell() methods.
+        - Added some handy reporting methods: tables_report() and
+          tables_dump(). These are almost always handy while first
+          analyzing a new HTML document for table content.
+        - Debugging and error output can now be assigned to arbitrary
+          file handles.
+        ! Old 'table_state' methods are now merely 'table' methods,
+          though the old table_state style is still supported.
+        ! Chains have been dropped. Though interesting (think xpath),
+          they needlessly complicated matters as they were nearly
+          universally unused.
 
 1.09  Fri Feb 25 17:49:00 EST 2005
         - Tables can now be selected by table tag attributes
