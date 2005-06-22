@@ -1,5 +1,8 @@
 Revision history for HTML::TableExtract
 
+2.01  Tue Jun 21 22:05:53 EDT 2005
+	- fixed some test changes
+
 2.00  Fri Jun 17 17:28:10 EDT 2005
         - Can now return parsed tables as HTML::TableElement objects
           within an HTML::Element tree structure (via HTML::TreeBuilder)

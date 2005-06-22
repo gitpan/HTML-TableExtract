@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 my $test_count;
-BEGIN { $test_count = 118 }
+BEGIN { $test_count = 119 }
 
 use strict;
 use lib './lib';
@@ -13,19 +13,16 @@ use testload;
 
 my $file = "$Dat_Dir/basic.html";
 
-use HTML::TableExtract qw(tree);
-
 my($tb_present, $et_present);
-BEGIN {
-  eval "use HTML::TreeBuilder";
-  $tb_present = !$@;
-  eval "use HTML::ElementTable";
-  $et_present = !$@;
-}
+eval  { require HTML::TreeBuilder };
+$tb_present = !$@;
+eval  { require HTML::ElementTable };
+$et_present = !$@;
 
 SKIP: {
   skip "HTML::TreeBuilder not installed",  $test_count unless $tb_present;
   skip "HTML::ElementTable not installed", $test_count unless $et_present;
+  use_ok('HTML::TableExtract', qw(tree));
   my $label = 'element table';
   my $te = HTML::TableExtract->new(
     depth     => 0,

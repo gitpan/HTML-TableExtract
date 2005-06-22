@@ -22,11 +22,11 @@ my @tablestates = $te->table_states;
 cmp_ok(@tablestates, '==', 5, "$label (extract count)");
 good_data($_, "$label (data)") foreach @tablestates;
 
-my $te = HTML::TableExtract->new(
+$te = HTML::TableExtract->new(
     headers => [qw(Eight Two)],
 );
 ok($te->parse_file($file), "$label (parse_file)");
-my @tablestates = $te->table_states;
+@tablestates = $te->table_states;
 cmp_ok(@tablestates, '==', 5, "$label (extract count)");
 good_slice_data($_, "$label (data)", 0, 3) foreach @tablestates;
 
