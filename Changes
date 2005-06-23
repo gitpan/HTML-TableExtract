@@ -1,5 +1,9 @@
 Revision history for HTML::TableExtract
 
+2.02  Thu Jun 23 12:42:44 EDT 2005
+	- squelched TREE() creation warnings for subclasses
+	- fixed a rows() bug involving keep_headers
+
 2.01  Tue Jun 21 22:05:53 EDT 2005
 	- fixed some test changes
 

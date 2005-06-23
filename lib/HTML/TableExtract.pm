@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.01';
+$VERSION = '2.02';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -25,6 +25,7 @@ use HTML::Entities;
 
 sub import {
     my $class = shift;
+    no warnings;
     unless (@_) {
       eval "sub TREE { 0 }";
       return;
@@ -787,7 +788,7 @@ sub _emsg {
   sub row_indices {
     my $self = shift;
     my $start_index = 1;
-    $start_index = 0 if $self->{headers} && $self->{keep_headers};
+    $start_index = 0 unless $self->{headers} && !$self->{keep_headers};
     $start_index .. $#{$self->{grid}};
   }
 

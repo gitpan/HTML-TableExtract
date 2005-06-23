@@ -24,7 +24,8 @@ foreach my $tsc (0 .. $#tablestates) {
     cmp_ok(join(',', @{$ts->{lineage}[$_]}), 'eq',
       $LINEAGE_DATA[$tsc][$_], "$label (data)");
   }
-  my $mod = ($ts->{headers} && $ts->{keep_headers}) ? 0 : 1;
+  my $mod = 1;
+  my $mod = 0 unless $ts->{headers} && !$ts->{keep_headers};
   my @rows = $ts->rows;
   cmp_ok(@rows, '==', @{$ts->{grid}}-$mod, "rows() returns correct number of rows");
 }
