@@ -25,7 +25,7 @@ foreach my $tsc (0 .. $#tablestates) {
       $LINEAGE_DATA[$tsc][$_], "$label (data)");
   }
   my $mod = 1;
-  my $mod = 0 unless $ts->{headers} && !$ts->{keep_headers};
+  $mod = 0 unless $ts->{headers} && !$ts->{keep_headers};
   my @rows = $ts->rows;
   cmp_ok(@rows, '==', @{$ts->{grid}}-$mod, "rows() returns correct number of rows");
 }

@@ -18,9 +18,9 @@ BEGIN {
   my $pkg = __PACKAGE__;
   $pkg =~ s%::%/%g;
   $pkg .= '.pm';
-  $pkg = File::Spec->canonpath($INC{$pkg});
-  $pkg =~ s/\/[^\/]+\.pm$//;
-  $base_dir = $pkg;
+  my @parts = File::Spec->splitpath(File::Spec->canonpath($INC{$pkg}));
+  $parts[-1] = '';
+  $base_dir = File::Spec->catpath(@parts);
 }
 $Dat_Dir = $base_dir;
 

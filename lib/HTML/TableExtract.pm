@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.02';
+$VERSION = '2.03';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -33,14 +33,10 @@ sub import {
     eval "sub TREE { 1 }";
     my $mode = shift;
     croak "Unknown mode '$mode'\n" unless $mode eq 'tree';
-    if (!$INC{'HTML/TreeBuilder.pm'}) {
-      eval "use HTML::TreeBuilder";
-      croak "Problem loading HTML::TreeBuilder : $@\n" if $@;
-    }
-    if (!$INC{'HTML/ElementTable.pm'}) {
-      eval "use HTML::ElementTable 1.13";
-      croak "problem loading HTML::ElementTable : $@\n" if $@;
-    }
+    eval "use HTML::TreeBuilder";
+    croak "Problem loading HTML::TreeBuilder : $@\n" if $@;
+    eval "use HTML::ElementTable 1.13";
+    croak "problem loading HTML::ElementTable : $@\n" if $@;
     @ISA = qw(HTML::TreeBuilder);
     $class;
 }
@@ -227,6 +223,8 @@ sub first_table_found {
   my $self = shift;
   ref $self->{_ts_sequential}[0] ? $self->{_ts_sequential}[0] : undef;
 }
+
+sub rows { shift->first_table_found->rows(@_) }
 
 sub tables {
   # Return all valid table records found, in the order that they
@@ -529,17 +527,22 @@ sub _emsg {
   sub _check_atrigger {
     # attributes
     my $self = shift;
+    return 1 unless scalar keys %{$self->{tattribs}};
+    return 0 unless scalar keys %{$self->{attribs}};
     my $a_hit = 1;
-    if (scalar keys %{$self->{tattribs}}) {
-      foreach my $attrib (keys %{$self->{tattribs}}) {
-        next unless defined $self->{attribs}{$attrib};
-        if ($self->{tattribs}{$attrib} ne $self->{attribs}{$attrib}) {
-          $a_hit = 0;
-          last;
-        }
+    foreach my $attrib (keys %{$self->{tattribs}}) {
+      if (! defined $self->{attribs}{$attrib}) {
+        $a_hit = 0; last;
       }
-      $self->_emsg("Matched attributes\n") if $self->{debug} > 3 && $a_hit;
+      if (! defined $self->{tattribs}{$attrib}) {
+        # undefined, but existing, target attribs are wildcards
+        next;
+      }
+      if ($self->{tattribs}{$attrib} ne $self->{attribs}{$attrib}) {
+        $a_hit = 0; last;
+      }
     }
+    $self->_emsg("Matched attributes\n") if $self->{debug} > 3 && $a_hit;
     $a_hit;
   }
 
@@ -578,7 +581,9 @@ sub _emsg {
             }
           }
         }
-        $self->_emsg("attempt match on $target : ") if $self->{debug} >= 5;
+        $target = defined $target ? $target : '';
+        $self->_emsg("attempt match on $target ($hpat): ")
+          if $self->{debug} >= 5;
         if ($target =~ $hpat) {
           my $hit = $1;
           $self->_emsg("($hit)\n") if $self->{debug} >= 5;
@@ -803,7 +808,8 @@ sub _emsg {
     my $r = shift;
     $r <= $#{$self->{grid}}
       or croak "row $r out of range ($#{$self->{grid}})\n";
-    $self->{grid}[$r];
+    my $row = $self->{grid}[$r];
+    wantarray ? @$row : $row;
   }
 
   sub column {
@@ -813,7 +819,7 @@ sub _emsg {
     foreach my $row ($self->rows) {
       push(@column, $self->cell($row, $c));
     }
-    \@column;
+    wantarray ? @column : \@column;
   }
 
   sub cell {
@@ -956,29 +962,6 @@ sub _emsg {
 
     # Grid column number
     $sc;
-  }
-
-  sub _skew_trans {
-    my($self, $r, $c) = splice(@_, 0, 3);
-    $r = $self->{rc} unless defined $r;
-    $c = $self->{cc} unless defined $c;
-    my $str = "$r,$c";
-    croak "$r,$c not found in skew cache\n";
-    split(/,/, $self->{_skew_cache}{$str});
-  }
-
-  sub _header_quest {
-    my $self = shift;
-    $self->{headers} && !$self->{_head_found} && $self->{_dc_trigger};
-  }
-
-  sub _active {
-    my $self = shift;
-    return 1 if $self->{active};
-    my @active;
-    return () unless @active;
-    ++$self->{active} if @active;
-    wantarray ? @active : $active[0];
   }
 
   sub _reset_hits {
@@ -1445,15 +1428,19 @@ Return all columns within a matched table. Each column returned is a
 reference to an array containing the text, HTML, or HTML::Element object
 of each cell depending on the mode of extraction.
 
-=item row()
+=item row($row)
 
-Return a particular row from within a matched table as a reference
-to an array.
+Return a particular row from within a matched table either as a list or
+an array reference, depending on context.
 
-=item column()
+=item column($col)
 
-Return a particular column from within a matched table as a reference
-to an array.
+Return a particular column from within a matched table as a list or an
+array reference, depending on context.
+
+=item cell($row,$col)
+
+Rreturn a particular item from within a matched table.
 
 =item depth()
 
@@ -1505,8 +1492,8 @@ Matthew P. Sisk, E<lt>F<sisk@mojotoad.com>E<gt>
 
 Copyright (c) 2000-2005 Matthew P. Sisk.
 All rights reserved. All wrongs revenged. This program is free
-software; you can redistribute it and/or modify it under the
-same terms as Perl itself.
+software; you can redistribute it and/or modify it under the same terms
+as Perl itself.
 
 =head1 SEE ALSO
 

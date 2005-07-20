@@ -1,11 +1,17 @@
 Revision history for HTML::TableExtract
 
+2.03  Wed Jul 20 12:45:56 EDT 2005
+        - Fixed greedy attribute bug (non qualifying tables were being
+          selected under certain circumstances)
+        - Moved more completely to File::Spec operations in testload.pm
+          in order to make windows boxes happy.
+
 2.02  Thu Jun 23 12:42:44 EDT 2005
-	- squelched TREE() creation warnings for subclasses
-	- fixed a rows() bug involving keep_headers
+        - squelched TREE() creation warnings for subclasses
+        - fixed a rows() bug involving keep_headers
 
 2.01  Tue Jun 21 22:05:53 EDT 2005
-	- fixed some test changes
+        - fixed some test changes
 
 2.00  Fri Jun 17 17:28:10 EDT 2005
         - Can now return parsed tables as HTML::TableElement objects
