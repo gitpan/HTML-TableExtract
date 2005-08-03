@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.03';
+$VERSION = '2.04';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -446,7 +446,6 @@ sub _emsg {
                  in_cell     => 0,
                  rc          => -1,
                  cc          => -1,
-                 frames      => [],
                  grid        => [],
                  gridalias   => [],
                  translation => [],
@@ -455,7 +454,6 @@ sub _emsg {
                  children    => [],
                  captured    => 0,
                  debug       => 0,
-                 tree        => '',
                 };
     bless $self, $class;
 

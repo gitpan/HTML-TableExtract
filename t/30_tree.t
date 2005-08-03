@@ -11,18 +11,22 @@ use FindBin;
 use lib $FindBin::RealBin;
 use testload;
 
+my $et_version = '1.13';
+
 my $file = "$Dat_Dir/basic.html";
 
 my($tb_present, $et_present);
-eval  { require HTML::TreeBuilder };
+eval  "use HTML::TreeBuilder";
 $tb_present = !$@;
-eval  { require HTML::ElementTable };
+eval  "use HTML::ElementTable $et_version";
 $et_present = !$@;
 
 SKIP: {
-  skip "HTML::TreeBuilder not installed",  $test_count unless $tb_present;
-  skip "HTML::ElementTable not installed", $test_count unless $et_present;
-  use_ok('HTML::TableExtract', qw(tree));
+  skip "HTML::TreeBuilder not installed",
+       $test_count unless $tb_present;
+  skip "HTML::ElementTable $et_version not installed",
+       $test_count unless $et_present;
+  use_ok("HTML::TableExtract", qw(tree));
   my $label = 'element table';
   my $te = HTML::TableExtract->new(
     depth     => 0,

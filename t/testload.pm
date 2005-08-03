@@ -2,6 +2,7 @@ package testload;
 
 use strict;
 use Test::More;
+use File::Spec;
 
 use vars qw( @ISA @EXPORT $Dat_Dir
              @LINEAGE_DATA @HEADERS @SKEW_DATA @TRANSLATION_DATA
