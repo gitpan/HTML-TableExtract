@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.04';
+$VERSION = '2.05';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -26,11 +26,8 @@ use HTML::Entities;
 sub import {
     my $class = shift;
     no warnings;
-    unless (@_) {
-      eval "sub TREE { 0 }";
-      return;
-    }
-    eval "sub TREE { 1 }";
+    *TREE = @_ ? sub { 1 } : sub { 0 };
+    return unless @_;
     my $mode = shift;
     croak "Unknown mode '$mode'\n" unless $mode eq 'tree';
     eval "use HTML::TreeBuilder";
@@ -432,6 +429,8 @@ sub _emsg {
   use strict;
   use Carp;
 
+  *TREE = *HTML::TableExtract::TREE;
+
   sub new {
     my $that  = shift;
     my $class = ref($that) || $that;
@@ -606,6 +605,7 @@ sub _emsg {
             $self->{hits}{$c} = $real_hit;
             push(@{$self->{order}}, $c);
             if (!%{$self->{hits_left}}) {
+              # Successful header row match
               ++$self->{head_found};
               $self->{hrow_num} = $r;
               last ROW;
@@ -790,8 +790,11 @@ sub _emsg {
 
   sub row_indices {
     my $self = shift;
-    my $start_index = 1;
-    $start_index = 0 unless $self->{headers} && !$self->{keep_headers};
+    my $start_index = 0;
+    if ($self->{headers}) {
+      $start_index = $self->{hrow_num};
+      $start_index += 1 if !$self->{keep_headers};
+    }
     $start_index .. $#{$self->{grid}};
   }
 

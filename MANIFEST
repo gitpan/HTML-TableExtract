@@ -17,5 +17,6 @@ t/22_header_row.t
 t/30_tree.t
 t/testload.pm
 t/basic.html
+t/basic2.html
 t/skew.html
 t/ugly.html

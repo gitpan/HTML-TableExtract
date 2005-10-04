@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 my $test_count;
-BEGIN { $test_count = 119 }
+BEGIN { $test_count = 189 }
 
 use strict;
 use lib './lib';
@@ -12,8 +12,6 @@ use lib $FindBin::RealBin;
 use testload;
 
 my $et_version = '1.13';
-
-my $file = "$Dat_Dir/basic.html";
 
 my($tb_present, $et_present);
 eval  "use HTML::TreeBuilder";
@@ -27,6 +25,7 @@ SKIP: {
   skip "HTML::ElementTable $et_version not installed",
        $test_count unless $et_present;
   use_ok("HTML::TableExtract", qw(tree));
+  my $file = "$Dat_Dir/basic.html";
   my $label = 'element table';
   my $te = HTML::TableExtract->new(
     depth     => 0,
@@ -54,4 +53,19 @@ SKIP: {
   my $estr = $te->elementify->as_HTML;
   $estr =~ s/\n//gm;
   cmp_ok($estr, 'eq', $hstr, 'mass html comp');
+
+  # TREE() gets called during header extractions, make sure it does
+  $label .= ' (header)';
+  $te = HTML::TableExtract->new(
+    headers => [qw(Eight Six Four Two Zero)],
+  );
+  ok($te->parse_file($file), "$label (parse_file)");
+  my $tree = $te->tree;
+  ok($tree, 'treetop');
+  isa_ok($tree, 'HTML::Element');
+  my $table = $te->first_table_found;
+  good_data($table, "$label (data)");
+  my $tree = $table->tree;
+  ok($tree, 'tabletop');
+  isa_ok($tree, 'HTML::ElementTable');
 }

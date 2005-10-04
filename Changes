@@ -1,5 +1,13 @@
 Revision history for HTML::TableExtract
 
+2.05  Tue Oct  4 16:00:02 EDT 2005
+        - Fixed a TREE() definition bug and class method assignments
+        - Fixed a 'row above header' bug, added tests
+
+2.04  Wed Aug  3 14:42:23 EDT 2005
+        - Fixed some conditional optional dependency tests in order to
+          avoid falure assertions on some test boxes.
+
 2.03  Wed Jul 20 12:45:56 EDT 2005
         - Fixed greedy attribute bug (non qualifying tables were being
           selected under certain circumstances)
