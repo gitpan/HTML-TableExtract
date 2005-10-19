@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.05';
+$VERSION = '2.06';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -98,7 +98,7 @@ sub new {
   }
 
   # Initialize counts and containers
-  $self->reset_state;
+  $self->_reset_state;
 
   $self;
 }
@@ -403,7 +403,7 @@ sub current_table {
   $self->{_tablestack}[$#{$self->{_tablestack}}];
 }
 
-sub reset_state {
+sub _reset_state {
   my $self = shift;
   $self->{_cdepth}        = -1;
   $self->{_tablestack}    = [];
@@ -756,29 +756,19 @@ sub _emsg {
 
   sub rows {
     my $self = shift;
-    my @tc;
-    if ($self->{automap} && $self->_map_makes_a_difference) {
-      my @cm = $self->column_map;
-      foreach my $i ($self->row_indices) {
-        $_ = $self->{grid}[$i];
-        my $r = [map(ref $_ ? $$_ : $_, @{$_}[@cm])];
-        push(@tc, $r);
-      }
+    my @ri = $self->row_indices;
+    my @rows;
+    my $grid = $self->{grid};
+    foreach ($self->row_indices) {
+      push(@rows, scalar $self->_slice_and_normalize_row($grid->[$_]));
     }
-    else {
-      # No remapping
-      foreach my $i ($self->row_indices) {
-        $_ = $self->{grid}[$i];
-        push(@tc, [map(ref $_ ? $$_ : $_, @$_)]);
-      }
-    }
-    @tc;
+    @rows;
   }
 
   sub columns {
     my $self = shift;
-    my @rows = $self->rows;
     my @cols;
+    my @rows = $self->rows;
     foreach my $row (@rows) {
       foreach my $c (0 .. $#$row) {
         $cols[$c] ||= [];
@@ -809,8 +799,25 @@ sub _emsg {
     my $r = shift;
     $r <= $#{$self->{grid}}
       or croak "row $r out of range ($#{$self->{grid}})\n";
-    my $row = $self->{grid}[$r];
-    wantarray ? @$row : $row;
+    my @ri = $self->row_indices;
+    my @row = $self->_slice_and_normalize_row(
+                $self->{grid}[($self->row_indices)[$r]]
+              );
+    wantarray ? @row : \@row;
+  }
+
+  sub _slice_and_normalize_row {
+    my $self = shift;
+    my $rowref = shift;
+    my @row;
+    if ($self->{automap} && $self->_map_makes_a_difference) {
+      @row = @{$rowref}[$self->column_map];
+    }
+    else {
+      @row = @$rowref;
+    }
+   @row = map($self->_cell_to_content($_), @row);
+   wantarray ? @row : \@row;
   }
 
   sub column {
@@ -828,7 +835,16 @@ sub _emsg {
     my($r, $c) = @_;
     my $row = $self->row($r);
     $c <= $#$row or croak "Column $c out of range ($#$row)\n";
-    ref $row->[$c] eq 'SCALAR' ? ${$row->[$c]} : $row->[$c];
+    $self->_cell_to_content($row->[$c]);
+  }
+
+  sub _cell_to_content {
+    my $self = shift;
+    @_ or croak "cell item required\n";
+    my $cell = shift;
+    return $cell unless ref $cell;
+    return $cell if TREE();
+    return $$cell;
   }
 
   sub space {
@@ -836,9 +852,9 @@ sub _emsg {
     my($r, $c) = @_;
     $r <= $#{$self->{gridalias}}
       or croak "row $r out of range ($#{$self->{gridalias}})\n";
-    my $row = $self->{gridalias}{$r};
+    my $row = $self->{gridalias}[$r];
     $c <= $#$row or croak "Column $c out of range ($#$row)\n";
-    ref $row->[$c] eq 'SCALAR' ? ${$row->[$c]} : $row->[$c];
+    $self->_cell_to_content($row->[$c]);
   }
 
   sub source_coords {
@@ -1031,8 +1047,7 @@ __END__
 
 =head1 NAME
 
-HTML::TableExtract - Perl module for extracting the text contained in
-tables within an HTML document.
+HTML::TableExtract - Perl module for extracting the content contained in tables within an HTML document, either as text or encoded element trees.
 
 =head1 SYNOPSIS
 
@@ -1109,8 +1124,8 @@ tables within an HTML document.
  $table_tree->cell(4,4)->replace_content('Golden Goose');
  $table_html = $table_tree->as_HTML;
  $table_text = $table_tree->as_text;
- $document_html = $te->tree->as_HTML;
-
+ $document_tree = $te->tree;
+ $document_html = $document_tree->as_HTML;
 
 =head1 DESCRIPTION
 
@@ -1118,7 +1133,7 @@ HTML::TableExtract is a subclass of HTML::Parser that serves to extract
 the information from tables of interest contained within an HTML
 document. The information from each extracted table is stored in table
 objects. Tables can be extracted as text, HTML, or HTML::ElementTable
-structures (for in-place editing).
+structures (for in-place editing or manipulation).
 
 There are currently four constraints available to specify which tables
 you would like to extract from a document: I<Headers>, I<Depth>,
@@ -1218,6 +1233,8 @@ separate objects of type HTML::TableExtract::Table. These table objects
 have their own methods, documented further below.
 
 =head2 CONSTRUCTOR
+
+=over
 
 =item new()
 
@@ -1350,10 +1367,14 @@ than STDERR.
 
 =back
 
+=back
+
 =head2 REGULAR METHODS
 
 The following methods are invoked directly from an
 HTML::TableExtract object.
+
+=over
 
 =item depths()
 
@@ -1384,6 +1405,12 @@ document. Returns undef if no tables were matched.
 Returns the current table object while parsing the HTML. Only useful if
 you're messing around with overriding HTML::Parser methods.
 
+=item tree()
+
+If the module was invoked in tree extraction mode, returns a reference
+to the top node of the HTML::Element tree structure for the entire
+document (which includes, ultimately, all tables within the document).
+
 =item tables_report([$show_content, $col_sep])
 
 Return a string summarizing extracted tables, along with their depth and
@@ -1395,10 +1422,24 @@ C<$col_sep>. Default C<$col_sep> is ':'.
 
 Same as C<tables_report()> except dump the information to STDOUT.
 
+=item start
+
+=item end
+
+=item text
+
+These are the hooks into HTML::Parser. If you want to subclass
+this module and have things work, you must at some point call
+these with content.
+
+=back
+
 =head2 DEPRECATED METHODS
 
 Tables used to be called 'table states'. Accordingly, the following
 methods still work but have been deprecated:
+
+=over
 
 =item table_state()
 
@@ -1412,22 +1453,29 @@ Is now tables()
 
 Is now first_table_found()
 
+=back
+
 =head2 TABLE METHODS
 
 The following methods are invoked from an HTML::TableExtract::Table
 object, such as those returned from the C<tables()> method.
 
+=over
+
 =item rows()
 
 Return all rows within a matched table. Each row returned is a reference
-to an array containing the text, HTML, or HTML::Elment object of each
-cell depending the mode of extraction.
+to an array containing the text, HTML, or reference to the HTML::Element
+object of each cell depending the mode of extraction. Tables with
+rowspan or colspan attributes will have some cells containing undef.
 
 =item columns()
 
 Return all columns within a matched table. Each column returned is a
-reference to an array containing the text, HTML, or HTML::Element object
-of each cell depending on the mode of extraction.
+reference to an array containing the text, HTML, or reference to
+HTML::Element object of each cell depending on the mode of extraction.
+Tables with rowspan or colspan attributes will have some cells
+containing undef.
 
 =item row($row)
 
@@ -1441,7 +1489,16 @@ array reference, depending on context.
 
 =item cell($row,$col)
 
-Rreturn a particular item from within a matched table.
+Return a particular item from within a matched table, whether it be the
+text, HTML, or reference to the HTML::Element object of that cell,
+depending on the mode of extraction. If the cell was covered due to
+rowspan or colspan effects, will return undef.
+
+=item space($row,$col)
+
+The same as cell(), except in cases where the given coordinates were
+covered due to rowspan or colspan issues, in which case the content of
+the covering cell is returned rather than undef.
 
 =item depth()
 
@@ -1454,6 +1511,12 @@ Return the count for this table within the depth it was found.
 =item coords()
 
 Return depth and count in a list.
+
+=item tree()
+
+If the module was invoked in tree extraction mode, this accessor
+provides a reference to the HTML::ElementTable structure encompassing
+the table.
 
 =item hrow()
 
@@ -1477,6 +1540,53 @@ values for each ancestor table involved. Note that corresponding table
 objects will not exist for ancestral tables that did not match specified
 constraints.
 
+=back
+
+=head1 NOTES ON TREE EXTRACTION MODE
+
+As mentioned above, HTML::TableExtract can be invoked in 'tree' mode
+where the resulting HTML and extracted tables are encoded in
+HTML::Element tree structures:
+
+  use HTML::TableExtract 'tree';
+
+There are a number of things to take note of while using this mode. The entire HTML document is encoded into an HTML::Element tree. Each table is part of this structure, but nevertheless is tracked separately via an HTML::ElementTable structure, which is a specialized form of HTML::Element tree.
+
+The HTML::ElementTable objects are accessible by invoking the tree()
+method from within each table object returned by HTML::TableExtract. The
+HTML::ElementTable objects have their own row(), col(), and cell()
+methods (among others). These are not to be confused with the row() and
+column() methods provided by the HTML::TableExtract::Table objects.
+
+For example, the row() method from HTML::TableElement will provide a
+reference to a 'glob' of all the elements in that row. Actions (such as
+setting attributes) performed on that row reference will affect all
+elements within that row. On the other hand, the row() method from the
+HTML::TableExtract::Table object will return an array (either by
+reference or list, depending on context) of the contents of each cell
+within the row. In tree mode, the content is represented by individual
+references to each cell -- these are references to the same
+HTML::Element objects that reside in the HTML::Element tree.
+
+The cell() methods provided in both cases will therefore return
+references to the same object. The exception to this is when a 'cell' in
+the table grid was originally 'covered' due to rowspan or colspan issues
+-- in this case the cell content will be undef. Likewise, the row() or
+column() methods from HTML::TableExtract::Table objects will return
+arrays potentially containing a mixture of object references and undefs.
+If you're going to be doing lots of manipulation of the table elements,
+it might be more efficient to access them via the methods provided by
+the HTML::ElementTable object instead. See L<HTML::ElementTable> for
+more information on how to manipulate those objects.
+
+Another option to the cell() method in HTML::TableExtract::Table is the
+space() method. It is largely similar to cell(), except when given
+coordinates of a cell that was covered due to rowspan or colspan
+effects, it will return the contents of the cell that was covering that
+space rather than undef. So if, for example, cell (0,0) had a rowspan of
+2 and colspan of 2, cell(1,1) would return undef and space(1,1) would
+return the same content as cell(0,0) or space(0,0).
+
 =head1 REQUIRES
 
 HTML::Parser(3), HTML::Entities(3)
@@ -1498,7 +1608,7 @@ as Perl itself.
 
 =head1 SEE ALSO
 
-HTML::Parser(3), HTML::TreeBuilder(3), HTML::TableElement(3), perl(1).
+HTML::Parser(3), HTML::TreeBuilder(3), HTML::ElementTable(3), perl(1).
 
 =cut
 

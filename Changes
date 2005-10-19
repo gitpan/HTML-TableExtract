@@ -1,5 +1,13 @@
 Revision history for HTML::TableExtract
 
+2.06  Tue Oct 18 13:13:52 EDT 2005
+        - Tightened up element interactions in TREE() mode when examing
+          rows, columns, cells, etc. Was running into trouble with
+          dereferencing scalars vs objects.
+        - Documented space() H::TE::T method, added tests
+        - Added POD tests
+        - Documentation updates and fixes
+
 2.05  Tue Oct  4 16:00:02 EDT 2005
         - Fixed a TREE() definition bug and class method assignments
         - Fixed a 'row above header' bug, added tests

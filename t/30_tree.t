@@ -33,7 +33,7 @@ SKIP: {
   );
   isa_ok($te, 'HTML::TreeBuilder', "$label - HTML::TableExtract");
   ok($te->parse_file($file), "$label (parse_file)");
-  my @tablestates = $te->table_states;
+  my @tablestates = $te->tables;
   cmp_ok(@tablestates, '==', 1, "$label (extract count)");
   good_data($_, "$label (data)") foreach @tablestates;
   my $tree = $te->tree;
@@ -60,12 +60,12 @@ SKIP: {
     headers => [qw(Eight Six Four Two Zero)],
   );
   ok($te->parse_file($file), "$label (parse_file)");
-  my $tree = $te->tree;
+  $tree = $te->tree;
   ok($tree, 'treetop');
   isa_ok($tree, 'HTML::Element');
   my $table = $te->first_table_found;
   good_data($table, "$label (data)");
-  my $tree = $table->tree;
+  $tree = $table->tree;
   ok($tree, 'tabletop');
   isa_ok($tree, 'HTML::ElementTable');
 }

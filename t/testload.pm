@@ -157,6 +157,7 @@ sub good_skew_data {
 }
 
 sub good_sticky_data {
+  # testing grid aliasing
   my($ts, $label, $reverse) = @_;
   ref $ts or die "Oops: Table state ref required\n";
   my $t = $ts->{gridalias};

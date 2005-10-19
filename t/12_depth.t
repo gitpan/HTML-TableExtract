@@ -16,6 +16,6 @@ use HTML::TableExtract;
 my $label = 'by depth';
 my $te = HTML::TableExtract->new( depth => 1 );
 ok($te->parse_file($file), "$label (parse_file)");
-my @tablestates = $te->table_states;
+my @tablestates = $te->tables;
 cmp_ok(@tablestates, '==', 2, "$label (extract count)");
 good_data($_, "$label (data)") foreach @tablestates;

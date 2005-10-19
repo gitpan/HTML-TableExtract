@@ -18,6 +18,6 @@ my $te = HTML::TableExtract->new(
   headers => [ qw(head3 head2 head1 head0) ],
 );
 ok($te->parse_file($file), "$label (parse_file)");
-my @tablestates = $te->table_states;
+my @tablestates = $te->tables;
 cmp_ok(@tablestates, '==', 1, "$label (extract count)");
 good_skew_data($_, "$label (data)") foreach @tablestates;

@@ -4,6 +4,8 @@ MANIFEST
 Makefile.PL
 lib/HTML/TableExtract.pm
 t/00_basic.t
+t/01_pod.t
+t/02_pod_coverage.t
 t/10_bulk.t
 t/11_count.t
 t/12_depth.t
