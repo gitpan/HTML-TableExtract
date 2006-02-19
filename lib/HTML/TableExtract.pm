@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.06';
+$VERSION = '2.07';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -155,13 +155,15 @@ sub end {
   my $self = shift;
   my @res = $self->SUPER::end(@_) if TREE();
   if ($self->{_in_a_table}) {
-    $self->_exit_table if $_[0] eq 'table';
     my $ts = $self->current_table;
     if ($_[0] eq 'td' || $_[0] eq 'th') {
       $ts->_exit_cell;
     }
     elsif ($_[0] eq 'tr') {
       $ts->_exit_row;
+    }
+    elsif ($_[0] eq 'table') {
+      $self->_exit_table;
     }
     unless (TREE()) {
       $self->text($_[1]) if $self->{keep_html} && $ts->{in_cell};
@@ -358,10 +360,7 @@ sub _exit_table {
   $ts->_exit_cell if $ts->{in_cell};
   $ts->_exit_row if $ts->{in_row};
 
-  if ($ts->_check_triggers) {
-    $self->_capture_table($ts);
-    $ts->tree(HTML::ElementTable->new_from_tree($ts->tree)) if TREE();
-  }
+  $self->_capture_table($ts) if $ts->_check_triggers;
 
   # Restore last table state
   pop(@{$self->{_tablestack}});
@@ -387,10 +386,16 @@ sub _capture_table {
     $msg .= "\n";
     $self->_emsg($msg);
   }
+  if (TREE()) {
+  $ts->tree(HTML::ElementTable->new_from_tree($ts->tree)) if TREE();
+  }
   if ($self->{subtables}) {
     foreach my $child (@{$ts->{children}}) {
       next if $child->{captured};
       $self->_capture_table($child, 'subtable');
+      $child->{slice_columns} = 0;
+      $child->{keep_headers}  = 1;
+      $child->{headers} = '';
     }
   }
   $ts->{captured} = 1;
@@ -607,7 +612,8 @@ sub _emsg {
             if (!%{$self->{hits_left}}) {
               # Successful header row match
               ++$self->{head_found};
-              $self->{hrow_num} = $r;
+              $self->{hrow_index} = $r;
+              $self->{hrow} = $self->{grid}[$r];
               last ROW;
             }
           }
@@ -782,8 +788,8 @@ sub _emsg {
     my $self = shift;
     my $start_index = 0;
     if ($self->{headers}) {
-      $start_index = $self->{hrow_num};
-      $start_index += 1 if !$self->{keep_headers};
+      $start_index = $self->hrow_index;
+      $start_index += 1 unless $self->{keep_headers};
     }
     $start_index .. $#{$self->{grid}};
   }
@@ -865,6 +871,11 @@ sub _emsg {
     my $row = $self->{translation}[$r];
     $c <= $#$row or croak "Column $c out of range ($#$row)\n";
     split(/,/, $self->{translation}[$r][$c]);
+  }
+
+  sub hrow_index {
+    my $self = shift;
+    $self->{hrow_index};
   }
 
   sub hrow {
@@ -1550,7 +1561,11 @@ HTML::Element tree structures:
 
   use HTML::TableExtract 'tree';
 
-There are a number of things to take note of while using this mode. The entire HTML document is encoded into an HTML::Element tree. Each table is part of this structure, but nevertheless is tracked separately via an HTML::ElementTable structure, which is a specialized form of HTML::Element tree.
+There are a number of things to take note of while using this mode. The
+entire HTML document is encoded into an HTML::Element tree. Each table
+is part of this structure, but nevertheless is tracked separately via an
+HTML::ElementTable structure, which is a specialized form of
+HTML::Element tree.
 
 The HTML::ElementTable objects are accessible by invoking the tree()
 method from within each table object returned by HTML::TableExtract. The
@@ -1558,7 +1573,7 @@ HTML::ElementTable objects have their own row(), col(), and cell()
 methods (among others). These are not to be confused with the row() and
 column() methods provided by the HTML::TableExtract::Table objects.
 
-For example, the row() method from HTML::TableElement will provide a
+For example, the row() method from HTML::ElmentTable will provide a
 reference to a 'glob' of all the elements in that row. Actions (such as
 setting attributes) performed on that row reference will affect all
 elements within that row. On the other hand, the row() method from the

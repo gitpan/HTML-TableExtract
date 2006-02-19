@@ -12,7 +12,7 @@ my $file = "$Dat_Dir/basic.html";
 
 use HTML::TableExtract;
 
-# By count
+# By headers
 my $label = 'by headers';
 my $te = HTML::TableExtract->new(
     headers => [qw(Eight Six Four Two Zero)],

@@ -80,7 +80,7 @@ $Dat_Dir = $base_dir;
 );
 
 sub good_data {
-  my($ts, $label) = @_;
+  my($ts, $label, @slice) = @_;
   ref $ts or die "Oops: Table state ref required\n";
   my $t = $ts->{grid};
   my $skew;
@@ -89,6 +89,11 @@ sub good_data {
   $skew = $txt =~ /^Header/ ? 1 : 0;
   my $row = 0 + $skew;
 
+  if (@slice) {
+    my @rows = $ts->rows;
+    cmp_ok(scalar @slice, '==', scalar @{$rows[0]}, "$label (col cnt)");
+  }
+
   # Must have rows
   ok(scalar @{$t}, "$label (rows)");
 
@@ -96,7 +101,8 @@ sub good_data {
   foreach my $r ($row .. $#$t) {
     # Must have columns
     ok(scalar @{$t->[$r]}, "$label (columns)");
-    foreach my $c (0 .. $#{$t->[$r]}) {
+    my @indices = @slice ? @slice : 0 .. $#{$t->[$r]};
+    foreach my $c (@indices) {
       my $rc = $skew ? $r : $r + 1;
       next if $ts->{headers} && !$ts->{hits}{$c};
       my $txt = ref $t->[$r][$c] eq 'SCALAR' ?

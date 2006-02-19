@@ -1,9 +1,14 @@
 Revision history for HTML::TableExtract
 
+2.07  Sun Feb 19 13:40:44 EST 2006
+        - Fixed subtable slicing bug
+        - Fixed hrow() attachment bug
+        - Added tests
+
 2.06  Tue Oct 18 13:13:52 EDT 2005
-        - Tightened up element interactions in TREE() mode when examing
-          rows, columns, cells, etc. Was running into trouble with
-          dereferencing scalars vs objects.
+        - Tightened up element interactions in TREE() mode when
+          examining rows, columns, cells, etc. Was running into trouble
+          with dereferencing scalars vs objects.
         - Documented space() H::TE::T method, added tests
         - Added POD tests
         - Documentation updates and fixes
