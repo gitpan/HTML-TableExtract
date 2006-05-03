@@ -1,5 +1,14 @@
 Revision history for HTML::TableExtract
 
+2.08  Wed May  3 17:17:33 EDT 2006
+        - Implemented new rasterizer for grid mapping. Thanks to Roland
+          Schar for a tortuous example of span issues.
+        - Regular extraction and TREE mode are using the same
+          rasterizer now.
+        - Fixed HTML stripping for a header matching bug on single word
+          text in keep_html mode (thanks to Michael S. Muegel for
+          pointing the bug out)
+
 2.07  Sun Feb 19 13:40:44 EST 2006
         - Fixed subtable slicing bug
         - Fixed hrow() attachment bug

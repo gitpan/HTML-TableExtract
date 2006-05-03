@@ -5,13 +5,16 @@ use Test::More;
 use File::Spec;
 
 use vars qw( @ISA @EXPORT $Dat_Dir
-             @LINEAGE_DATA @HEADERS @SKEW_DATA @TRANSLATION_DATA
+             @LINEAGE_DATA @HEADERS @SKEW_DATA
+             @GNARLY_DATA @TRANSLATION_DATA
            );
 
 require Exporter;
 @ISA = qw(Exporter);
-@EXPORT = qw( $Dat_Dir @LINEAGE_DATA @HEADERS @SKEW_DATA @TRANSLATION_DATA
-              good_data good_slice_data good_skew_data good_sticky_data
+@EXPORT = qw( $Dat_Dir @LINEAGE_DATA @HEADERS @SKEW_DATA
+i             @TRANSLATION_DATA @GNARLY_DATA
+              good_data good_slice_data good_skew_data
+              good_gnarly_data good_sticky_data
             );
 
 my $base_dir;
@@ -77,6 +80,17 @@ $Dat_Dir = $base_dir;
   [ '4,0', '3,1', '3,1', '4,3' ],
   [ '5,0', '3,1', '3,1', '5,3' ],
   [ '6,0', '6,0', '6,2', '6,3' ]
+);
+
+@GNARLY_DATA = (
+  [ '(0,0) [1,4]',            '',            '',            '', '(0,1) [2,4]',            '',            '',            '' ],
+  [ '(1,0) [2,1]', '(1,1) [1,1]', '(1,2) [1,2]',            '',            '',            '',            '',            '' ],
+  [            '', '(2,0) [2,4]',            '',            '',            '', '(2,1) [2,2]',            '', '(2,2) [1,1]' ],
+  [ '(3,0) [1,1]',            '',            '',            '',            '',            '',            '', '(3,1) [1,1]' ],
+  [ '(4,0) [3,2]',            '', '(4,1) [1,1]', '(4,2) [3,1]', '(4,3) [4,4]',            '',            '',            '' ],
+  [            '',            '', '(5,0) [1,1]',            '',            '',            '',            '',            '' ],
+  [            '',            '', '(6,0) [1,1]',            '',            '',            '',            '',            '' ],
+  [ '(7,0) [1,4]',            '',            '',            '',            '',            '',            '',            '' ]
 );
 
 sub good_data {
@@ -145,8 +159,18 @@ sub good_slice_data {
   }
 }
 
-sub good_skew_data {
-  my($ts, $label, $reverse) = @_;
+sub good_skew_data   {
+  push(@_, 0) if @_ == 2;
+  _good_span_data(@_, \@SKEW_DATA);
+}
+
+sub good_gnarly_data {
+  push(@_, 0) if @_ == 2;
+  _good_span_data(@_, \@GNARLY_DATA);
+}
+
+sub _good_span_data {
+  my($ts, $label, $reverse, $REF_DATA) = @_;
   ref $ts or die "Oops: Table state ref required\n";
   my $t = $ts->{grid};
   foreach my $r (1 .. $#$t) {
@@ -154,9 +178,9 @@ sub good_skew_data {
     my @cols = 0 .. $#$row;
     @cols = reverse @cols if $reverse;
     foreach my $c (@cols) {
-      my $txt = ref $row->[$c] eq 'SCALAR' ?
-        ${$row->[$c]} : $row->[$c]->as_text;
-      cmp_ok($txt, 'eq', $SKEW_DATA[$r][$c], $label);
+      my $txt = ref $row->[$c] eq 'SCALAR' ?  ${$row->[$c]} : $row->[$c]->as_text;
+      $txt = '' unless defined $txt;
+      cmp_ok($txt, 'eq', $REF_DATA->[$r][$c], $label);
     }
   }
   1;
@@ -166,7 +190,7 @@ sub good_sticky_data {
   # testing grid aliasing
   my($ts, $label, $reverse) = @_;
   ref $ts or die "Oops: Table state ref required\n";
-  my $t = $ts->{gridalias};
+  my $t = $ts->_gridalias;
   foreach my $r (0 .. $#$t) {
     my $row = $t->[$r];
     my @cols = 0 .. $#$row;

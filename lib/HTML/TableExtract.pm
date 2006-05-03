@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.07';
+$VERSION = '2.08';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -32,7 +32,7 @@ sub import {
     croak "Unknown mode '$mode'\n" unless $mode eq 'tree';
     eval "use HTML::TreeBuilder";
     croak "Problem loading HTML::TreeBuilder : $@\n" if $@;
-    eval "use HTML::ElementTable 1.13";
+    eval "use HTML::ElementTable 1.17";
     croak "problem loading HTML::ElementTable : $@\n" if $@;
     @ISA = qw(HTML::TreeBuilder);
     $class;
@@ -126,16 +126,12 @@ sub start {
       ++$skiptag;
     }
     elsif ($_[0] eq 'td' || $_[0] eq 'th') {
-      $ts->_enter_cell;
-      # Inspect rowspan/colspan attributes, record as necessary for
-      # future column count transforms.
-      if ($self->{gridmap}) {
-        my %attrs = ref $_[1] ? %{$_[1]} : {};
-        my $rspan = $attrs{rowspan} || 1;
-        my $cspan = $attrs{colspan} || 1;
-        $ts->_skew($rspan, $cspan);
-        $ts->_set_grid($rspan, $cspan, @res);
-      }
+      $ts->_enter_cell(@_);
+      my %attrs = ref $_[1] ? %{$_[1]} : {};
+      my $rspan = $attrs{rowspan} || 1;
+      my $cspan = $attrs{colspan} || 1;
+      $ts->_rasterizer->($ts->row_count, $rspan, $cspan);
+      $ts->_anchor_item(@res);
       ++$skiptag;
     }
     if ($self->{keep_html} && !$skiptag) {
@@ -238,28 +234,19 @@ sub tables {
   @{$self->{_ts_sequential}};
 }
 
-# we are an HTML::TreeBuilder, which is an HTML::Element structure after
-# parsing...but we provide this for consistency with the table object
-# method for accessing the tree structures.
+# in tree mode, we already are an HTML::TreeBuilder, which is an
+# HTML::Element structure after parsing...but we provide this for
+# consistency with the table object method for accessing the tree
+# structures.
 
 sub tree { shift }
 
 sub tables_report {
   # Print out a summary of extracted tables, including depth/count
-  my($self, $include_content, $col_sep) = @_;
-  $col_sep ||= ':';
+  my $self = shift;
   my $str;
   foreach my $ts ($self->tables) {
-    $str .= "TABLE(" . $ts->depth . ", " . $ts->count . ')';
-    if ($include_content) {
-      $str .= ":\n";
-      foreach my $row ($ts->rows) {
-        $str .= join($col_sep, @$row) . "\n";
-      }
-    }
-    else {
-      $str .= "\n";
-    }
+    $str .= $ts->report(@_);
   }
   $str;
 }
@@ -334,7 +321,8 @@ sub _enter_table {
   # if we are under an umbrella. Notice that with table states, "depth"
   # and "count" are absolute coordinates recording where this table was
   # created, whereas "tdepth" and "tcount" are the target constraints.
-  # Headers "absolute" meaning, therefore are passed by the same name.
+  # Headers have "absolute" meaning, therefore are passed by the
+  # same name.
   if (!$umbrella) {
     $tsparms{tdepth}   = $self->{depth};
     $tsparms{tcount}   = $self->{count};
@@ -359,6 +347,9 @@ sub _exit_table {
   # Last ditch fix for HTML mangle
   $ts->_exit_cell if $ts->{in_cell};
   $ts->_exit_row if $ts->{in_row};
+
+  # transform from tree to grid using our rasterized template
+  $ts->_grid_map();
 
   $self->_capture_table($ts) if $ts->_check_triggers;
 
@@ -386,9 +377,7 @@ sub _capture_table {
     $msg .= "\n";
     $self->_emsg($msg);
   }
-  if (TREE()) {
   $ts->tree(HTML::ElementTable->new_from_tree($ts->tree)) if TREE();
-  }
   if ($self->{subtables}) {
     foreach my $child (@{$ts->{children}}) {
       next if $child->{captured};
@@ -451,7 +440,6 @@ sub _emsg {
                  rc          => -1,
                  cc          => -1,
                  grid        => [],
-                 gridalias   => [],
                  translation => [],
                  hrow        => [],
                  order       => [],
@@ -459,6 +447,8 @@ sub _emsg {
                  captured    => 0,
                  debug       => 0,
                 };
+
+    $self->{_rastamon} = HTML::TableExtract::Rasterize->make_rasterizer();
     bless $self, $class;
 
     my %parms = @_;
@@ -481,10 +471,12 @@ sub _emsg {
     $self;
   }
 
-  sub _set_grid {
-    my($self, $rspan, $cspan, @res) = @_;
-    my $row = $self->{rc};
-    my $col = $self->_skew;
+  sub _anchor_item {
+    # anchor the reference to a cell in our grid -- in TREE mode this is
+    # a reference to a data element, otherwise it's a reference to an
+    # empty scalar in which we will collect our text.
+    my($self, @res) = @_;
+    my $row  = $self->{grid}[-1];
     my $item;
     if (@res && ref $res[0]) {
       $item = $res[0];
@@ -493,19 +485,61 @@ sub _emsg {
       my $scalar_ref;
       $item = \$scalar_ref;
     }
-    $self->{grid}[$row][$col]        = $item;
-    $self->{gridalias}[$row][$col]   = $item;
-    $self->{translation}[$row][$col] = "$row,$col";
-    foreach my $rc (0 .. $rspan - 1) {
-      foreach my $cc (0 .. $cspan - 1) {
-        my($r, $c) = ($row + $rc, $col + $cc);
-        next if $r == $row && $c == $col;
-        my $blank;
-        $self->{grid}[$r][$c] = \$blank;
-        $self->{gridalias}[$r][$c] = $item;
-        $self->{translation}[$r][$c] = "$row,$col";
+    push(@$row, $item);
+  }
+
+  sub _gridalias {
+    my $self = shift;
+    $self->{gridalias} ||= $self->_make_gridalias;
+  }
+
+  sub _grid_map {
+    # using our rasterized template, flesh out our captured items which
+    # are still in 'tree' format
+    my $self = shift;
+    my $template = $self->_rasterizer->();
+    my $grid = $self->{grid};
+    foreach my $r (0 .. $#$template) {
+      my $row  = $grid->[$r];
+      my $trow = $template->[$r];
+      print STDERR "Flesh row $r ($#$row) to $#$trow\n" if $self->{debug} > 1;
+      foreach my $c (0 .. $#$trow) {
+        my $cell = $row->[$c];
+        print STDERR $trow->[$c] ? '1' : '0' if $self->{debug} > 1;
+        next if $trow->[$c];
+        my $scalar;
+        splice(@$row, $c, 0, \$scalar);
+      }
+      print STDERR "\n" if $self->{debug} > 1;
+      croak "row $r splice mismatch: $#$row vs $#$trow\n"
+        unless $#$row == $#$trow;
+    }
+    $grid;
+  }
+
+  sub _make_gridalias {
+    # our aliased grid will have references in masked cells to the same
+    # cell that is covering it via spanning.
+    my $self = shift;
+    my $grid = $self->{grid};
+    my $template = $self->_rasterizer->();
+    my(@gridalias, @translation);
+    $gridalias[$_] = [@{$grid->[$_]}] foreach 0 .. $#$grid;
+    foreach my $r (0 .. $#gridalias) {
+      my $row = $gridalias[$r];
+      foreach my $c (0 .. $#$row) {
+        my $tcell = $template->[$r][$c] || next;
+        my($rspan, $cspan) = @$tcell;
+        foreach my $rs (0 .. $rspan-1) {
+          foreach my $cs (0 .. $cspan-1) {
+            $gridalias[$r + $rs][$c + $cs] = $grid->[$r][$c];
+            $translation[$r + $rs][$c + $cs] = "$r,$c";
+          }
+        }
       }
     }
+    $self->{translation} = \@translation;
+    $self->{gridalias}   = \@gridalias;
   }
 
   ### Constraint tests
@@ -565,9 +599,8 @@ sub _emsg {
           if ($ref_type eq 'SCALAR') {
             my $item = $$ref;
             if ($self->{keep_html} && $self->{strip_html_on_match}) {
-              my $strip = HTML::TableExtract::StripHTML->new;
-              $strip->parse($item);
-              $target = $strip->tidbit;
+              my $stripper = HTML::TableExtract::StripHTML->new;
+              $target = $stripper->strip($item);
             }
             else {
               $target = $item;
@@ -650,13 +683,6 @@ sub _emsg {
     $self->_exit_row if $self->{in_row};
     ++$self->{rc};
     ++$self->{in_row};
-
-    # Reset next_col for gridmapping
-    $self->{next_col} = 0;
-    while ($self->{taken}{"$self->{rc},$self->{next_col}"}) {
-      ++$self->{next_col};
-    }
-
     push(@{$self->{grid}}, [])
   }
 
@@ -684,6 +710,9 @@ sub _emsg {
     }
     ++$self->{cc};
     ++$self->{in_cell};
+    my %attrs = ref $_[1] ? %{$_[1]} : {};
+    my $rspan = $attrs{rowspan} || 1;
+    my $cspan = $attrs{colspan} || 1;
   }
 
   sub _exit_cell {
@@ -760,15 +789,23 @@ sub _emsg {
     @{$self->{lineage}};
   }
 
-  sub rows {
+  sub rows { shift->_rows(0) }
+
+  sub space_rows {
     my $self = shift;
+    $self->_rows(1);
+  }
+
+  sub _rows {
+    my $self  = shift;
+    my $alias = shift;
     my @ri = $self->row_indices;
     my @rows;
-    my $grid = $self->{grid};
+    my $grid = $alias ? $self->_gridalias : $self->{grid};
     foreach ($self->row_indices) {
       push(@rows, scalar $self->_slice_and_normalize_row($grid->[$_]));
     }
-    @rows;
+    wantarray ? @rows : \@rows;
   }
 
   sub columns {
@@ -856,9 +893,10 @@ sub _emsg {
   sub space {
     my $self = shift;
     my($r, $c) = @_;
-    $r <= $#{$self->{gridalias}}
-      or croak "row $r out of range ($#{$self->{gridalias}})\n";
-    my $row = $self->{gridalias}[$r];
+    my $gridalias = $self->_gridalias;
+    $r <= $#$gridalias
+      or croak "row $r out of range ($#$gridalias)\n";
+    my $row = $gridalias->[$r];
     $c <= $#$row or croak "Column $c out of range ($#$row)\n";
     $self->_cell_to_content($row->[$c]);
   }
@@ -928,68 +966,10 @@ sub _emsg {
   sub _add_text {
     my($self, $txt) = @_;
     my $r = $self->{rc};
+    my $c = $self->{cc};
     my $row = $self->{grid}[$r];
-    my $c = $self->_skew;
     ${$row->[$c]} .= $txt;
     $txt;
-  }
-
-  sub _skew {
-    # Skew registers the effects of rowspan/colspan issues when gridmap
-    # is enabled.
-
-    my($self, $rspan, $cspan) = @_;
-    my($r,$c) = ($self->{rc},$self->{cc});
-
-    if ($self->{debug} > 6) {
-      $self->_emsg("($self->{rc},$self->{cc}) Inspecting skew for ($r,$c)");
-      $self->_emsg(defined $rspan ? " (set with $rspan,$cspan)\n" : "\n");
-    }
-
-    my $sc = $c;
-    if (! defined $self->{skew_cache}{"$r,$c"}) {
-      $sc = $self->{next_col} if defined $self->{next_col};
-      $self->{skew_cache}{"$r,$c"} = $sc;
-      my $next_col = $sc + 1;
-      while ($self->{taken}{"$r,$next_col"}) {
-        ++$next_col;
-      }
-      $self->{next_col} = $next_col;
-    }
-    else {
-      $sc = $self->{skew_cache}{"$r,$c"};
-    }
-
-    # If we have span arguments, set skews
-    if (defined $rspan) {
-      # Default span is always 1, even if not explicitly stated.
-      $rspan ||= 1;
-      $cspan ||= 1;
-      --$rspan; --$cspan;
-      # 1,1 is a degenerate case, there's nothing to do.
-      if ($rspan || $cspan) {
-        foreach my $rs (0 .. $rspan) {
-          my $cr = $r + $rs;
-          # If we in the same row as the skewer, the "span" is one less
-          # because the skewer cell occupies the same row.
-          my $start_col = $rs ? $sc : $sc + 1;
-          my $fin_col   = $sc + $cspan;
-          foreach ($start_col .. $fin_col) {
-            $self->{taken}{"$cr,$_"} ||= "$r,$sc";
-          }
-          if (!$rs) {
-            my $next_col = $fin_col + 1;
-            while ($self->{taken}{"$cr,$next_col"}) {
-              ++$next_col;
-            }
-            $self->{next_col} = $next_col;
-          }
-        }
-      }
-    }
-
-    # Grid column number
-    $sc;
   }
 
   sub _reset_hits {
@@ -1003,10 +983,172 @@ sub _emsg {
     1;
   }
 
+  sub _rasterizer { shift->{_rastamon} }
+
+  sub report {
+    # Print out a summary of this table, including depth/count
+    my($self, $include_content, $col_sep) = @_;
+    $col_sep ||= ':';
+    my $str;
+    $str .= "TABLE(" . $self->depth . ", " . $self->count . ')';
+    if ($include_content) {
+      $str .= ":\n";
+      foreach my $row ($self->rows) {
+        $str .= join($col_sep, @$row) . "\n";
+      }
+    }
+    else {
+      $str .= "\n";
+    }
+    $str;
+  }
+
+  sub dump {
+    my $self = shift;
+    $self->_emsg($self->report(@_));
+  }
+
   sub _emsg {
     my $self = shift;
     my $fh = $self->{error_handle};
     print $fh @_;
+  }
+
+}
+
+##########
+
+{
+
+  package HTML::TableExtract::Rasterize;
+
+  # Provide a closure that will rasterize (turn into a grid) a table
+  # from a tree structure based on repeated data element calls with
+  # rowspan and colspan information. Not as straight forward as it
+  # seems...see test cases for an example bugaboo.
+
+  my $DEBUG = 0;
+
+  sub make_rasterizer {
+    my $pkg = shift;
+    my(@row_spinner, @col_spinner);
+    my @grid;
+    sub {
+      return \@grid unless @_;
+      my($row_num, $rspan, $cspan) = @_;
+      $rspan = 1 unless $rspan > 1;
+      $cspan = 1 unless $cspan > 1;
+      my $rspin_propogate = 0;
+      my $row_added = 0;
+      if ($row_num > $#grid) {
+        # add new row
+        $row_added = 1;
+        my @new_row;
+        # first add new row spinner
+        if ($row_spinner[-1] && $col_spinner[-1]) {
+          push(@row_spinner, $row_spinner[-1]);
+          $rspin_propogate = 1;
+        }
+        else {
+          push(@row_spinner, $cspan - 1);
+        }
+        # spin columns
+        foreach (@col_spinner) {
+          if ($_) {
+            push(@new_row, 0);
+            --$_;
+          }
+          else {
+            push(@new_row, undef);
+          }
+        }
+        @new_row = (undef) unless @new_row;
+        push(@grid, \@new_row);
+      }
+      my $current_row = $grid[-1];
+      # locate next available cell in row
+      my $col;
+      foreach my $ci (0 .. $#$current_row) {
+        if (! defined $current_row->[$ci]) {
+          $col = $ci;
+          last;
+        }
+      }
+      if (! defined $col) {
+        ADDCOL: while (! defined $col) {
+          # if no cells were available, add a column
+          foreach my $ri (0 .. $#grid) {
+            my $row = $grid[$ri];
+            my $cspan_count = $row_spinner[$ri];
+            if (!$cspan_count) {
+              push(@$row, undef);
+            }
+            else {
+              push(@$row, 0);
+              --$row_spinner[$ri];
+            }
+          }
+          push(@col_spinner, $col_spinner[-1]);
+          foreach my $ci (0 .. $#$current_row) {
+            if (! defined $current_row->[$ci]) {
+              $col = $ci;
+              last ADDCOL;
+            }
+          }
+        }
+        $col_spinner[-1] = $rspan - 1 if $col == $#$current_row;
+        $row_spinner[$#grid] = $cspan - 1;
+      }
+
+      # we now have correct coordinates for this element
+      $current_row->[$col] = [$rspan, $cspan];
+      $col_spinner[$col] = $rspan - 1;
+
+      # if this is an embedded placment (not a trailing element), use up
+      # the cspan
+      if ($col < $#$current_row) {
+        my $offset = 1;
+        my $row_span = $col_spinner[$col];
+        if ($col + $row_spinner[-1] < $#$current_row &&
+            $row_added && !$rspin_propogate) {
+          # cell is spun out -- clear spinner unless it inherited cspan
+          # from a cell above
+          $row_spinner[-1] = 0;
+        }
+        while ($offset < $cspan) {
+          my $cursor = $col + $offset;
+          $current_row->[$cursor] = 0;
+          $col_spinner[$cursor] = $row_span;
+          ++$offset;
+          if ($col + $offset > $#$current_row) {
+            $row_spinner[-1] = $cspan - $offset;
+            last;
+          }
+        }
+      }
+
+      if ($DEBUG) {
+        foreach my $r (0 .. $#grid) {
+          my $row = $grid[$r];
+          foreach my $c (0 .. $#$row) {
+            if (defined $row->[$c]) {
+              print STDERR $row->[$c] ? 1 : 0;
+            }
+            else {
+              print STDERR '?';
+            }
+          }
+          print STDERR " $row_spinner[$r]\n";
+        }
+        print STDERR "\n";
+        foreach (@col_spinner) {
+          print STDERR defined $_ ? $_ : '?';
+        }
+        print STDERR "\n\n-----\n\n";
+      }
+
+      return \@grid;
+    }
   }
 
 }
@@ -1022,8 +1164,6 @@ sub _emsg {
   use HTML::Parser;
   @ISA = qw(HTML::Parser);
 
-  my %inside;
-
   sub tag {
    my($self, $tag, $num) = @_;
    $self->{_htes_inside}{$tag} += $num;
@@ -1031,7 +1171,7 @@ sub _emsg {
 
   sub text {
     my $self = shift;
-    return if $inside{script} || $inside{style};
+    return if $self->{_htes_inside}{script} || $self->{_htes_inside}{style};
     $self->{_htes_tidbit} .= $_[0];
   }
 
@@ -1048,7 +1188,12 @@ sub _emsg {
     bless $self, $class;
   }
 
-  sub tidbit { shift->{_htes_tidbit} }
+  sub strip {
+    my $self = shift;
+    $self->parse(shift);
+    $self->eof;
+    $self->{_htes_tidbit};
+  }
 
 }
 
@@ -1357,14 +1502,12 @@ extracting into an elment tree structure.
 
 =item strip_html_on_match
 
-When C<keep_html> is enabled, HTML is retained by default during
-attempts at matching header strings. With C<strip_html_on_match>
-enabled, html tags are first stripped from header strings before any
-comparisons are made. (so if C<strip_html_on_match> is not enabled and
-C<keep_html> is, you would have to include potential HTML tags in the
-regexp for header matches). Stripped header tags are replaced with an
-empty string, e.g. 'hot dE<lt>emE<gt>ogE<lt>/emE<gt>' would become 'hot
-dog' before attempting a match.
+When C<keep_html> is enabled, HTML is stripped by default during
+attempts at matching header strings (so if C<strip_html_on_match> is not
+enabled and C<keep_html> is, you would have to include potential HTML
+tags in the regexp for header matches). Stripped header tags are
+replaced with an empty string, e.g. 'hot dE<lt>emE<gt>ogE<lt>/emE<gt>'
+would become 'hot dog' before attempting a match.
 
 =item error_handle
 
@@ -1479,6 +1622,7 @@ Return all rows within a matched table. Each row returned is a reference
 to an array containing the text, HTML, or reference to the HTML::Element
 object of each cell depending the mode of extraction. Tables with
 rowspan or colspan attributes will have some cells containing undef.
+Returns a list or a reference to an array depending on context.
 
 =item columns()
 
@@ -1573,7 +1717,7 @@ HTML::ElementTable objects have their own row(), col(), and cell()
 methods (among others). These are not to be confused with the row() and
 column() methods provided by the HTML::TableExtract::Table objects.
 
-For example, the row() method from HTML::ElmentTable will provide a
+For example, the row() method from HTML::ElementTable will provide a
 reference to a 'glob' of all the elements in that row. Actions (such as
 setting attributes) performed on that row reference will affect all
 elements within that row. On the other hand, the row() method from the
@@ -1594,7 +1738,7 @@ it might be more efficient to access them via the methods provided by
 the HTML::ElementTable object instead. See L<HTML::ElementTable> for
 more information on how to manipulate those objects.
 
-Another option to the cell() method in HTML::TableExtract::Table is the
+An alternative to the cell() method in HTML::TableExtract::Table is the
 space() method. It is largely similar to cell(), except when given
 coordinates of a cell that was covered due to rowspan or colspan
 effects, it will return the contents of the cell that was covering that
@@ -1616,7 +1760,7 @@ Matthew P. Sisk, E<lt>F<sisk@mojotoad.com>E<gt>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000-2005 Matthew P. Sisk.
+Copyright (c) 2000-2006 Matthew P. Sisk.
 All rights reserved. All wrongs revenged. This program is free
 software; you can redistribute it and/or modify it under the same terms
 as Perl itself.
