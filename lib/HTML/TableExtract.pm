@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.08';
+$VERSION = '2.09';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -22,6 +22,8 @@ use HTML::Entities;
 # trickery for subclassing from HTML::TreeBuilder rather than the
 # default HTML::Parser. (use HTML::TableExtract qw(tree);) Also installs
 # a mode constant TREE().
+
+BEGIN { *TREE = sub { 0 } }
 
 sub import {
     my $class = shift;
@@ -345,8 +347,14 @@ sub _exit_table {
   my $ts = $self->current_table;
 
   # Last ditch fix for HTML mangle
-  $ts->_exit_cell if $ts->{in_cell};
-  $ts->_exit_row if $ts->{in_row};
+  if ($ts->{in_cell}) {
+    $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), forcing exit of cell ($ts->{rc},$ts->{cc}) due to table exit\n") if $self->{debug};
+    $self->_exit_cell;
+  }
+  if ($ts->{in_row}) {
+    $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), forcing exit of row $ts->{rc} due to table exit\n") if $self->{debug};
+    $self->_exit_row;
+  }
 
   # transform from tree to grid using our rasterized template
   $ts->_grid_map();
@@ -499,16 +507,30 @@ sub _emsg {
     my $self = shift;
     my $template = $self->_rasterizer->();
     my $grid = $self->{grid};
+    # drop empty rows
+    if ($self->{debug}) {
+      foreach (0 .. $#$grid) {
+        next if @{$grid->[$_]};
+        $self->_emsg("Dropping empty row $_\n");
+      }
+    }
+    @$grid = grep(@$_, @$grid);
     foreach my $r (0 .. $#$template) {
       my $row  = $grid->[$r];
       my $trow = $template->[$r];
-      print STDERR "Flesh row $r ($#$row) to $#$trow\n" if $self->{debug} > 1;
+      $self->_emsg("Flesh row $r ($#$row) to $#$trow\n") if $self->{debug} > 1;
       foreach my $c (0 .. $#$trow) {
-        my $cell = $row->[$c];
         print STDERR $trow->[$c] ? '1' : '0' if $self->{debug} > 1;
-        next if $trow->[$c];
-        my $scalar;
-        splice(@$row, $c, 0, \$scalar);
+        if ($trow->[$c]) {
+          if (! defined $row->[$c]) {
+            $row->[$c] = \undef;
+          }
+          next;
+        }
+        else {
+          my $scalar;
+          splice(@$row, $c, 0, \$scalar);
+        }
       }
       print STDERR "\n" if $self->{debug} > 1;
       croak "row $r splice mismatch: $#$row vs $#$trow\n"
@@ -679,8 +701,10 @@ sub _emsg {
 
   sub _enter_row {
     my $self = shift;
-    $self->_exit_cell if $self->{in_cell};
-    $self->_exit_row if $self->{in_row};
+    if ($self->{in_row}) {
+      $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), forcing exit of row $self->{rc} due to new row\n") if $self->{debug};
+      $self->_exit_row;
+    }
     ++$self->{rc};
     ++$self->{in_row};
     push(@{$self->{grid}}, [])
@@ -689,7 +713,10 @@ sub _emsg {
   sub _exit_row {
     my $self = shift;
     if ($self->{in_row}) {
-      $self->_exit_cell if $self->{in_cell};
+      if ($self->{in_cell}) {
+        $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), forcing exit of cell ($self->{rc}, $self->{cc}) due to new row\n") if $self->{debug};
+        $self->_exit_cell;
+      }
       $self->{in_row} = 0;
       $self->{cc} = -1;
     }
@@ -701,7 +728,10 @@ sub _emsg {
 
   sub _enter_cell {
     my $self = shift;
-    $self->_exit_cell if $self->{in_cell};
+    if ($self->{in_cell}) {
+      $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), forcing exit of cell ($self->{rc},$self->{cc}) due to new cell\n") if $self->{debug};
+      $self->_exit_cell;
+    }
     if (!$self->{in_row}) {
       # Go ahead and try to recover from mangled HTML, because we care.
       $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), inferring <TR> as row $self->{rc}\n")
@@ -1031,16 +1061,22 @@ sub _emsg {
 
   sub make_rasterizer {
     my $pkg = shift;
-    my(@row_spinner, @col_spinner);
-    my @grid;
+    my(@grid, @row_spinner, @col_spinner);
+    my $empty_row_offset = 0;
     sub {
       return \@grid unless @_;
       my($row_num, $rspan, $cspan) = @_;
       $rspan = 1 unless $rspan > 1;
       $cspan = 1 unless $cspan > 1;
-      my $rspin_propogate = 0;
-      my $row_added = 0;
-      if ($row_num > $#grid) {
+      my($rspin_propogate, $row_added);
+      my $trigger = $#grid + $empty_row_offset;
+      if ($row_num > $trigger) {
+        # adjust for having been handed a row that skips a prior row,
+        # otherwise the next cell will land in a wrong row. Hopefully
+        # this doesn't happen too often but I've seen it in the wild!
+        if ($row_num - $trigger > 1) {
+          $empty_row_offset += $row_num - $trigger - 1;
+        }
         # add new row
         $row_added = 1;
         my @new_row;

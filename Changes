@@ -1,8 +1,17 @@
 Revision history for HTML::TableExtract
 
+2.09  Thu Jun  8 15:46:17 EDT 2006
+        - Tweaked rasterizer to handle some situations where the HTML is
+          broken but tables can still be inferred.
+        - Fixed TREE() definition for situations where import() is
+          not invoked. (thanks to DDICK on cpan.org)
+
 2.08  Wed May  3 17:17:33 EDT 2006
         - Implemented new rasterizer for grid mapping. Thanks to Roland
           Schar for a tortuous example of span issues.
+        - This also fixes a bug the old skew method had when it
+          encountered ridiculously large spans (out of memory). Thanks
+          to Andreas Gustafsson.
         - Regular extraction and TREE mode are using the same
           rasterizer now.
         - Fixed HTML stripping for a header matching bug on single word

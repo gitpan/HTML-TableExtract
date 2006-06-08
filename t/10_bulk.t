@@ -2,7 +2,7 @@
 
 use strict;
 use lib './lib';
-use Test::More tests => 51;
+use Test::More tests => 52;
 
 use FindBin;
 use lib $FindBin::RealBin;
@@ -10,7 +10,7 @@ use testload;
 
 my $file = "$Dat_Dir/ugly.html";
 
-use HTML::TableExtract;
+BEGIN { require_ok('HTML::TableExtract') }
 
 # by bulk, lineage integrity
 my $label = 'by bulk with lineage check';
