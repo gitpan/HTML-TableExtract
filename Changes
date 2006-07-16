@@ -1,5 +1,8 @@
 Revision history for HTML::TableExtract
 
+2.10  Sat Jul 15 20:50:41 EDT 2006
+        - minor bug fixed in HTML repair routines (thanks to Dave Gray)
+
 2.09  Thu Jun  8 15:46:17 EDT 2006
         - Tweaked rasterizer to handle some situations where the HTML is
           broken but tables can still be inferred.

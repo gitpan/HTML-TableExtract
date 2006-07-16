@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.09';
+$VERSION = '2.10';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -349,11 +349,11 @@ sub _exit_table {
   # Last ditch fix for HTML mangle
   if ($ts->{in_cell}) {
     $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), forcing exit of cell ($ts->{rc},$ts->{cc}) due to table exit\n") if $self->{debug};
-    $self->_exit_cell;
+    $ts->_exit_cell;
   }
   if ($ts->{in_row}) {
     $self->_emsg("Mangled HTML in table ($self->{depth},$self->{count}), forcing exit of row $ts->{rc} due to table exit\n") if $self->{debug};
-    $self->_exit_row;
+    $ts->_exit_row;
   }
 
   # transform from tree to grid using our rasterized template
