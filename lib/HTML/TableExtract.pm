@@ -12,7 +12,7 @@ use Carp;
 
 use vars qw($VERSION @ISA);
 
-$VERSION = '2.10';
+$VERSION = '2.11';
 
 use HTML::Parser;
 @ISA = qw(HTML::Parser);
@@ -184,6 +184,19 @@ sub text {
     }
   }
   @res;
+}
+
+sub parse {
+  my $self = shift;
+  $self->_reset_state unless $self->{_parsing};
+  $self->{_parsing} ||= 1;
+  $self->SUPER::parse(@_);
+}
+
+sub eof {
+  my $self = shift;
+  $self->{_parsing} = 0;
+  $self->SUPER::eof(@_);
 }
 
 ### End HTML::Parser overrides
@@ -413,6 +426,7 @@ sub _reset_state {
   $self->{_ts_sequential} = [];
   $self->{_counts}        = [];
   $self->{_in_a_table}    = 0;
+  $self->{_parsing}       = 0;
 }
 
 sub _emsg {

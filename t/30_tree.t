@@ -49,12 +49,13 @@ SKIP: {
   $te->_attribute_purge;
   my $estr = $te->elementify->as_HTML;
   $estr =~ s/\n//gm;
+  $estr =~ s/\"//gm;
   cmp_ok($estr, 'eq', $hstr, 'mass html comp');
 
   # TREE() gets called during header extractions, make sure it does
   $label .= ' (header)';
   $te = HTML::TableExtract->new(
-    headers => [qw{(0,1) [2,4]}],
+    headers => [qr|\(0,1\) \[2,4\]|],
   );
   ok($te->parse_file($file), "$label (parse_file)");
   $tree = $te->tree;

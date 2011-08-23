@@ -49,6 +49,5 @@ sub alias_test {
   cmp_ok($str, 'eq',  $item2,  "$label (via rows)");
   cmp_ok($str, 'eq',  $cell,   "$label (via cell)");
   cmp_ok($str, 'eq',  $space,  "$label (via space)");
-  no warnings;
-  cmp_ok(undef, 'eq', $cellno, "$label (undef via cell)");
+  cmp_ok(defined undef, '==', defined $cellno, "$label (undef via cell)");
 }
